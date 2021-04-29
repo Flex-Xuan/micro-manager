@@ -20,21 +20,25 @@
 
 package org.micromanager.events;
 
+import org.micromanager.MMEvent;
+
 /**
  * This class signals when the exposure time for a given camera has changed.
+ *
+ * The default implementation of this event is posted on the Studio event bus,
+ * so subscribe using {@link org.micromanager.events.EventManager}.
  */
-public class ExposureChangedEvent {
-   private final String cameraName_;
-   private final double newExposureTime_;
+public interface ExposureChangedEvent extends MMEvent {
 
-   public ExposureChangedEvent(String cameraName, double newExposureTime) {
-      cameraName_ = cameraName;
-      newExposureTime_ = newExposureTime;
-   }
-   public String getCameraName() {
-      return cameraName_;
-   }
-   public double getNewExposureTime() {
-      return newExposureTime_;
-   }
+   /**
+    * Camera whose exposure time changed.
+    * @return Camera whose exposure time changed.
+    */
+   String getCameraName();
+
+   /**
+    * New exposure time
+    * @return New exposure time.
+    */
+   double getNewExposureTime();
 }

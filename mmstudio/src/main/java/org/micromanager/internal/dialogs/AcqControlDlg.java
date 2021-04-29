@@ -30,10 +30,11 @@ import org.micromanager.acquisition.internal.AcquisitionWrapperEngine;
 import org.micromanager.data.Datastore;
 import org.micromanager.data.internal.DefaultDatastore;
 import org.micromanager.display.ChannelDisplaySettings;
-import org.micromanager.display.internal.RememberedSettings;
+import org.micromanager.display.internal.RememberedDisplaySettings;
 import org.micromanager.events.ChannelExposureEvent;
 import org.micromanager.events.ChannelGroupChangedEvent;
 import org.micromanager.events.GUIRefreshEvent;
+import org.micromanager.events.NewPositionListEvent;
 import org.micromanager.events.internal.ChannelColorEvent;
 import org.micromanager.internal.MMStudio;
 import org.micromanager.internal.interfaces.AcqSettingsListener;
@@ -93,6 +94,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.awt.event.WindowFocusListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
@@ -106,7 +108,11 @@ import java.util.Enumeration;
 
 /**
  * Time-lapse, channel and z-stack acquisition setup dialog.
- * This dialog specifies all parameters for the MDA acquisition. 
+ * This dialog specifies all parameters for the MDA acquisition.
+ *
+ * TODO: GUI settings and acquisition engine settings are continuously synchronized.
+ * This causes a lot of overhead and a lot of room for bugs.  Separate these better,
+ * and only synchronize when really needed.
  *
  */
 public final class AcqControlDlg extends JFrame implements PropertyChangeListener,
@@ -162,7 +168,6 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
    // persistent properties (app settings), most are only for backward compatibility
    private static final String MDA_SEQUENCE_SETTINGS = "MDA_SEQUENCE_SETTINGS";
    private static final String ACQ_INTERVAL = "acqInterval";
-   private static final String ACQ_TIME_UNIT = "acqTimeInit";
    private static final String ACQ_ZBOTTOM = "acqZbottom";
    private static final String ACQ_ZTOP = "acqZtop";
    private static final String ACQ_ZSTEP = "acqZstep";
@@ -287,6 +292,11 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
       // load acquisition settings
       SequenceSettings sequenceSettings = loadAcqSettingsFromProfile();
 
+      // protect from bugs caused by zero z step
+      if (sequenceSettings.sliceZStepUm() < 0.000000001) {
+         sequenceSettings = sequenceSettings.copyBuilder().sliceZStepUm(0.1).build();
+      }
+
       // Restore Column Width and Column order
       int columnCount = 7;
       columnWidth_ = new int[columnCount];
@@ -300,8 +310,6 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
       // create the table of channels
       createChannelTable();
 
-      acqEng_.setSequenceSettings(sequenceSettings); // listener will call updateGUIContent()
-
       createToolTips();
 
       super.pack();
@@ -311,7 +319,25 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
       super.setBounds(100, 100, size.width, size.height);
       WindowPositioning.setUpBoundsMemory(this, this.getClass(), "MDA");
 
+      acqEng_.setSequenceSettings(sequenceSettings); // listener will call updateGUIContent()
+
       mmStudio_.events().registerForEvents(this);
+
+      // when focus is lots, ensure that channel cell editors close
+      WindowFocusListener windowFocusListener = new WindowFocusListener() {
+         @Override
+         public void windowGainedFocus(WindowEvent e) {
+         }
+         @Override
+         public void windowLostFocus(WindowEvent e) {
+            // may need to run the full applySettingsFromGUI()
+            AbstractCellEditor ae = (AbstractCellEditor) channelTable_.getCellEditor();
+            if (ae != null) {
+               ae.stopCellEditing();
+            }
+         }
+      };
+      super.addWindowFocusListener(windowFocusListener);
    }
 
 
@@ -457,10 +483,9 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
       overrideLabel.setForeground(Color.red);
 
       JButton disableCustomIntervalsButton = new JButton("Disable custom intervals");
-      disableCustomIntervalsButton.addActionListener((ActionEvent e) -> {
-         acqEng_.setSequenceSettings(acqEng_.getSequenceSettings().copyBuilder().
-                 useCustomIntervals(false).build());
-      });
+      disableCustomIntervalsButton.addActionListener((ActionEvent e) ->
+              acqEng_.setSequenceSettings(acqEng_.getSequenceSettings().copyBuilder().
+              useCustomIntervals(false).build()));
       disableCustomIntervalsButton.setFont(DEFAULT_FONT);
 
       customTimesPanel_.add(overrideLabel, "alignx center, wrap");
@@ -569,7 +594,7 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
             "skip 1, spanx, gaptop 0, alignx left");
 
       slicesPanel_.addActionListener((final ActionEvent e) -> {
-         // enable disable all related contrtols
+         // enable disable all related controls
          applySettingsFromGUI();
       });
       return slicesPanel_;
@@ -622,10 +647,10 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
       JSpinner.DefaultEditor editor = (JSpinner.DefaultEditor) afSkipInterval_.getEditor();
       editor.setFont(DEFAULT_FONT);
       editor.getTextField().setColumns(3);
-      afSkipInterval_.setValue(acqEng_.getSequenceSettings().skipAutofocusCount);
+      afSkipInterval_.setValue(acqEng_.getSequenceSettings().skipAutofocusCount());
       afSkipInterval_.addChangeListener((ChangeEvent e) -> {
          applySettingsFromGUI();
-         afSkipInterval_.setValue(acqEng_.getSequenceSettings().skipAutofocusCount);
+         afSkipInterval_.setValue(acqEng_.getSequenceSettings().skipAutofocusCount());
       });
       afPanel_.add(afSkipInterval_);
 
@@ -751,9 +776,7 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
    private JComponent createCloseButton() {
       final JButton closeButton = new JButton("Close");
       closeButton.setFont(DEFAULT_FONT);
-      closeButton.addActionListener((ActionEvent e) -> {
-         close();
-      });
+      closeButton.addActionListener((ActionEvent e) -> close());
       return closeButton;
    }
 
@@ -937,10 +960,10 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
    public void onChannelColorEvent(ChannelColorEvent event) {
       model_.setChannelColor(event.getChannelGroup(), event.getChannel(), event.getColor());
       ChannelDisplaySettings newCDS =
-              RememberedSettings.loadChannel(mmStudio_, event.getChannelGroup(),
+              RememberedDisplaySettings.loadChannel(mmStudio_, event.getChannelGroup(),
                       event.getChannel(), null ).copyBuilder().color(event.getColor()).
                       build();
-      RememberedSettings.storeChannel(mmStudio_, event.getChannelGroup(), event.getChannel(), newCDS);
+      RememberedDisplaySettings.storeChannel(mmStudio_, event.getChannelGroup(), event.getChannel(), newCDS);
    }
 
    @Subscribe
@@ -966,6 +989,8 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
 
    @Subscribe
    public void onChannelGroupChanged(ChannelGroupChangedEvent event) {
+      acqEng_.setSequenceSettings(acqEng_.getSequenceSettings().copyBuilder().
+              channelGroup(event.getNewChannelGroup()).build());
       updateChannelAndGroupCombo();
    }
 
@@ -1071,13 +1096,36 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
       return ssb.build();
    }
 
+   /**
+    * Updates the dialog (with acqEngine settings) and only returns once this
+    * is actually executed (on the EDT).
+    */
+   public void updateGUIBlocking() {
+      if (!SwingUtilities.isEventDispatchThread()) {
+         try {
+            SwingUtilities.invokeAndWait(() -> {
+               updateGUIContents();
+            });
+         } catch (InterruptedException e) {
+            mmStudio_.logs().logError(e);
+         } catch (InvocationTargetException e) {
+            mmStudio_.logs().logError(e);
+         }
+      }
+   }
+
    public final void updateGUIContents() {
       SequenceSettings sequenceSettings = acqEng_.getSequenceSettings();
       updateGUIFromSequenceSettings(sequenceSettings);
    }
 
    private void updateGUIFromSequenceSettings(final SequenceSettings sequenceSettings) {
-      SwingUtilities.invokeLater(() -> {
+      if (!SwingUtilities.isEventDispatchThread()) {
+         SwingUtilities.invokeLater(() -> {
+            updateGUIFromSequenceSettings(sequenceSettings);
+         } );
+      }
+      else {
          if (disableGUItoSettings_) {
             return;
          }
@@ -1188,8 +1236,21 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
          savePanel_.repaint();
 
          disableGUItoSettings_ = false;
+      }
+   }
 
-      });
+   @Subscribe
+   public void onNewPositionList(NewPositionListEvent newPositionListEvent) {
+      if (!SwingUtilities.isEventDispatchThread()) {
+         SwingUtilities.invokeLater(() -> {
+            onNewPositionList(newPositionListEvent);
+         } );
+      }
+      else {
+         acqEng_.setPositionList(newPositionListEvent.getPositionList());
+         // update summary
+         summaryTextArea_.setText(acqEng_.getVerboseSummary());
+      }
    }
 
    public synchronized void saveAcqSettingsToProfile() {
@@ -1268,12 +1329,7 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
       if (acqFile_ != null) {
          final SequenceSettings settings = mmStudio_.acquisitions().loadSequenceSettings(path);
          try {
-            GUIUtils.invokeAndWait(new Runnable() {
-               @Override
-               public void run() {
-                  acqEng_.setSequenceSettings(settings);
-               }
-            });
+            GUIUtils.invokeAndWait(() -> acqEng_.setSequenceSettings(settings));
          } catch (InterruptedException e) {
             ReportingUtils.logError(e, "Interrupted while updating GUI");
          } catch (InvocationTargetException e) {
@@ -1304,16 +1360,16 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
     * Asks acqEngine to estimate memory usage, so use this method only after
     * settings have been send to acqEngine.
     * Prompt the user if there may not be enough memory
-    * @return false if user chooses to cancel.
+    * @return true if user chooses to cancel.
     */
-   private boolean warnIfMemoryMayNotBeSufficient() {
+   private boolean warnMemoryMayNotBeSufficient() {
       if (savePanel_.isSelected()) {
-         return true;
+         return false;
       } 
 
       long acqTotalBytes = acqEng_.getTotalMemory();
       if (acqTotalBytes < 0) {
-         return false;
+         return true;
       }
 
       // get memory than can be used within JVM:
@@ -1332,7 +1388,8 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
          style.append("font-weight:" + (font.isBold() ? "bold" : "normal") + ";");
          style.append("font-size:" + font.getSize() + "pt;");
          Color c = label.getForeground();
-         style.append(("color:rgb(") + c.getRed() + "," + c.getGreen() + "," + c.getBlue() +")" );
+         style.append(("color:rgb(")).append(c.getRed()).append(",").
+                 append(c.getGreen()).append(",").append(c.getBlue()).append(")");
 
          int availableMemoryMB = (int) (freeRam / (1024 * 1024));
 
@@ -1350,7 +1407,7 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
 
          // handle link events
          ep.addHyperlinkListener(e -> {
-            if (e.getEventType().equals(HyperlinkEvent.EventType.ACTIVATED)) {
+            if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
                try {
                   Desktop.getDesktop().browse(e.getURL().toURI());
                } catch (IOException | URISyntaxException ex) {
@@ -1363,9 +1420,9 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
 
          int answer = JOptionPane.showConfirmDialog(this, ep,
                  "Not enough memory", JOptionPane.YES_NO_OPTION);
-         return answer == JOptionPane.YES_OPTION;
+         return answer != JOptionPane.YES_OPTION;
       }
-      return true;
+      return false;
    }
 
    public Datastore runAcquisition() {
@@ -1374,7 +1431,7 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
          return null;
       }
 
-      if (!warnIfMemoryMayNotBeSufficient()) {
+      if (warnMemoryMayNotBeSufficient()) {
          return null;
       }
 
@@ -1423,7 +1480,7 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
       }
 
       applySettingsFromGUI();
-      if (! warnIfMemoryMayNotBeSufficient()) {
+      if (warnMemoryMayNotBeSufficient()) {
          return null;
       }
 
@@ -1452,10 +1509,11 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
       return -1;
    }
 
-
-    @Override
+   @Override
    public void settingsChanged() {
-      updateGUIContents();
+      if (this.isDisplayable()) {
+         updateGUIContents();
+      }
    }
 
    private void applySettingsFromGUI() {
@@ -1483,14 +1541,12 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
          ssb.useCustomIntervals(acqEng_.getSequenceSettings().useCustomIntervals());
          ssb.customIntervalsMs(acqEng_.getSequenceSettings().customIntervalsMs());
 
-         ssb.sliceZBottomUm (NumberUtils.displayStringToDouble(zBottom_.getText()));
-         ssb.sliceZTopUm(NumberUtils.displayStringToDouble(zTop_.getText()));
-         ssb.sliceZTopUm(NumberUtils.displayStringToDouble(zTop_.getText()));
          ssb.sliceZBottomUm(NumberUtils.displayStringToDouble(zBottom_.getText()));
+         ssb.sliceZTopUm(NumberUtils.displayStringToDouble(zTop_.getText()));
          ssb.sliceZStepUm(NumberUtils.displayStringToDouble(zStep_.getText()));
          ssb.relativeZSlice(zRelativeAbsolute_ == 0);  // 0 == relative, 1 == absolute
-
          ssb.useSlices(slicesPanel_.isSelected());
+
          ssb.usePositionList(positionsPanel_.isSelected());
 
          ssb.useChannels(channelsPanel_.isSelected());
@@ -1534,7 +1590,12 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
       }
       ssb.saveMode(DefaultDatastore.getPreferredSaveMode(mmStudio_));
 
-      acqEng_.setSequenceSettings(ssb.build());
+      try {
+         acqEng_.setSequenceSettings(ssb.build());
+      } catch (UnsupportedOperationException uoex) {
+         mmStudio_.logs().showError("Zero Z step size is not supported, resetting to 1 micron", this);
+         acqEng_.setSequenceSettings(ssb.sliceZStepUm(1.0).build());
+      }
 
       disableGUItoSettings_ = false;
       updateGUIContents();
@@ -1625,7 +1686,7 @@ public final class AcqControlDlg extends JFrame implements PropertyChangeListene
    }
 
    @SuppressWarnings("serial")
-   public class ComponentTitledPanel extends JPanel {
+   public static class ComponentTitledPanel extends JPanel {
       public ComponentTitledBorder compTitledBorder;
       public boolean borderSet_ = false;
       public Component titleComponent;

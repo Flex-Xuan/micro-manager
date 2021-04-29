@@ -23,8 +23,7 @@
 package org.micromanager.display.internal.gearmenu;
 
 import com.bulenkov.iconloader.IconLoader;
-import ij.CompositeImage;
-import ij.ImagePlus;
+
 import java.awt.Color;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
@@ -35,15 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import javax.swing.BorderFactory;
-import javax.swing.Icon;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JSpinner;
-import javax.swing.JTextField;
-import javax.swing.SpinnerNumberModel;
+import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import net.miginfocom.swing.MigLayout;
@@ -56,7 +47,6 @@ import org.micromanager.display.DisplaySettings;
 import org.micromanager.display.DisplayWindow;
 import org.micromanager.display.ImageExporter;
 import org.micromanager.internal.utils.FileDialogs;
-import org.micromanager.internal.utils.MMDialog;
 import org.micromanager.internal.utils.ReportingUtils;
 
 
@@ -64,7 +54,7 @@ import org.micromanager.internal.utils.ReportingUtils;
  * This dialog provides an interface for exporting (a portion of) a dataset
  * to an image sequence, complete with all MicroManager overlays.
  */
-public final class ExportMovieDlg extends MMDialog {
+public final class ExportMovieDlg extends JDialog {
    private static final Icon ADD_ICON =
                IconLoader.getIcon("/org/micromanager/icons/plus_green.png");
    private static final Icon DELETE_ICON =
@@ -172,7 +162,7 @@ public final class ExportMovieDlg extends MMDialog {
       }
 
       public void setAxis(String axis) {
-         int axisLen = store_.getAxisLength(axis);
+         int axisLen = store_.getNextIndex(axis);
          String curAxis = (String) axisSelector_.getSelectedItem();
          if (curAxis.equals(axis) && minModel_ != null) {
             // Already set properly and spinner models exist.
@@ -264,7 +254,7 @@ public final class ExportMovieDlg extends MMDialog {
       JLabel help = new JLabel("<html><body>Export a series of images from your dataset. The images will be exactly as currently<br>drawn on your display, including histogram scaling, zoom, overlays, etc. Note that<br>this does not preserve the raw data, nor any metadata.</body></html>");
       contentsPanel_.add(help, "align center");
 
-      if (getIsComposite()) {
+      if (isComposite()) {
          contentsPanel_.add(new JLabel("<html><body>The \"channel\" axis is unavailable as the display is in composite mode.</body></html>"),
                "align center");
       }
@@ -488,7 +478,7 @@ public final class ExportMovieDlg extends MMDialog {
    /**
     * Returns true if the display mode is composite.
     */
-   private boolean getIsComposite() {
+   private boolean isComposite() {
       return display_.getDisplaySettings().getColorMode() ==
               DisplaySettings.ColorMode.COMPOSITE;
    }
@@ -502,8 +492,8 @@ public final class ExportMovieDlg extends MMDialog {
       ArrayList<String> result = new ArrayList<>();
       for (String axis : provider_.getAxes()) {
          // Channel axis is only available when in non-composite display modes.
-         if (provider_.getMaxIndices().getIndex(axis) > 0 &&
-               (!axis.equals(Coords.CHANNEL) || !getIsComposite())) {
+         if (provider_.getNextIndex(axis) > 0 &&
+               (!axis.equals(Coords.CHANNEL) || !isComposite())) {
             result.add(axis);
          }
       }

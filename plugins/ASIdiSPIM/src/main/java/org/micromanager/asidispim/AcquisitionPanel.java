@@ -1781,10 +1781,10 @@ public class AcquisitionPanel extends ListeningJPanel implements DevicesListener
             return false;
         }
 
-        boolean liveModeOriginally = gui_.live().getIsLiveModeOn();
+        boolean liveModeOriginally = gui_.live().isLiveModeOn();
 
         if (liveModeOriginally) {
-            gui_.live().setLiveMode(false);
+            gui_.live().setLiveModeOn(false);
         }
 
         // make sure slice timings are up to date
@@ -2463,7 +2463,7 @@ public class AcquisitionPanel extends ListeningJPanel implements DevicesListener
                 if (acqNum > 0) {
                     name += "_" + acqNum;
                 }
-                SummaryMetadata.Builder smb = gui_.data().getSummaryMetadataBuilder();
+                SummaryMetadata.Builder smb = gui_.data().summaryMetadataBuilder();
                 smb = smb.channelNames(channelNames_).
                         channelGroup(multiChannelPanel_.getChannelGroup()).
                         zStepUm((double) acqSettings.stepSizeUm).
@@ -3050,7 +3050,7 @@ public class AcquisitionPanel extends ListeningJPanel implements DevicesListener
         } catch (Exception ex) {
             MyDialogUtils.showError("Could not restore camera after acquisition");
         }
-        gui_.live().setLiveMode(liveModeOriginally);
+        gui_.live().setLiveModeOn(liveModeOriginally);
 
         if (nonfatalError) {
             MyDialogUtils.showError("Missed some images during acquisition, see core log for details");
@@ -3166,7 +3166,7 @@ public class AcquisitionPanel extends ListeningJPanel implements DevicesListener
      * @param position - position at which to insert image
      * @param ms - Time stamp to be added to the image metadata
      * @param taggedImg - image + metadata to be added
-     * @throws org.json.JSONException
+     * @throws mmcorej.org.json.JSONException
      * @throws org.micromanager.data.DatastoreFrozenException
      * @throws org.micromanager.data.DatastoreRewriteException
      */

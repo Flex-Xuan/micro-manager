@@ -15,9 +15,8 @@ import org.micromanager.acquisition.SequenceSettings;
 import org.micromanager.data.Datastore;
 import org.micromanager.data.Pipeline;
 import org.micromanager.data.internal.DefaultDatastore;
-import org.micromanager.events.AcquisitionEndedEvent;
-import org.micromanager.events.internal.DefaultAcquisitionEndedEvent;
-import org.micromanager.events.internal.DefaultAcquisitionStartedEvent;
+import org.micromanager.acquisition.AcquisitionEndedEvent;
+import org.micromanager.events.NewPositionListEvent;
 import org.micromanager.events.internal.InternalShutdownCommencingEvent;
 import org.micromanager.internal.MMStudio;
 import org.micromanager.internal.interfaces.AcqSettingsListener;
@@ -55,6 +54,7 @@ public final class AcquisitionWrapperEngine implements AcquisitionEngine {
 
    public void setSequenceSettings(SequenceSettings sequenceSettings) {
       sequenceSettings_ = sequenceSettings;
+      calculateSlices();
       settingsChanged();
    }
 
@@ -159,6 +159,28 @@ public final class AcquisitionWrapperEngine implements AcquisitionEngine {
          sb.customIntervalsMs(null);
       }
 
+      // Several "translations" have to be made to accommodate the Clojure engine:
+      if (!sequenceSettings.useFrames()) { sb.numFrames(0); }
+      if (!sequenceSettings.useChannels()) { sb.channels(null); }
+      switch (sequenceSettings.acqOrderMode()) {
+         case AcqOrderMode.TIME_POS_SLICE_CHANNEL:
+            sb.timeFirst(false);
+            sb.slicesFirst(false);
+            break;
+         case AcqOrderMode.TIME_POS_CHANNEL_SLICE:
+            sb.timeFirst(false);
+            sb.slicesFirst(true);
+            break;
+         case AcqOrderMode.POS_TIME_SLICE_CHANNEL:
+            sb.timeFirst(true);
+            sb.slicesFirst(false);
+            break;
+         case AcqOrderMode.POS_TIME_CHANNEL_SLICE:
+            sb.timeFirst(true);
+            sb.slicesFirst(true);
+            break;
+      }
+
       try {
          // Start up the acquisition engine
          SequenceSettings acquisitionSettings = sb.build();
@@ -200,18 +222,17 @@ public final class AcquisitionWrapperEngine implements AcquisitionEngine {
    }
 
    private int getNumChannels() {
+      if (!sequenceSettings_.useChannels()) {
+         return 1;
+      }
+      if (sequenceSettings_.channels() == null || sequenceSettings_.channels().size() == 0) {
+         return 1;
+      }
       int numChannels = 0;
-      if (sequenceSettings_.useChannels()) {
-         if (sequenceSettings_.channels() == null) {
-            return 0;
+      for (ChannelSpec channel : sequenceSettings_.channels()) {
+         if (channel != null && channel.useChannel()) {
+            ++numChannels;
          }
-         for (ChannelSpec channel : sequenceSettings_.channels()) {
-            if (channel.useChannel()) {
-               ++numChannels;
-            }
-         }
-      } else {
-         numChannels = 1;
       }
       return numChannels;
    }
@@ -245,7 +266,7 @@ public final class AcquisitionWrapperEngine implements AcquisitionEngine {
    }
 
    private int getTotalImages() {
-      if (!sequenceSettings_.useChannels()) {
+      if (!sequenceSettings_.useChannels() || sequenceSettings_.channels().size() == 0) {
          return getNumFrames() * getNumSlices() * getNumChannels() * getNumPositions();
       }
 
@@ -285,7 +306,7 @@ public final class AcquisitionWrapperEngine implements AcquisitionEngine {
          camChannels.add(row,
                  channels.get(row).copyBuilder().camera(getSource(channels.get(row))).build());
       }
-      sequenceSettings_.channels = camChannels;
+      sequenceSettings_ = sequenceSettings_.copyBuilder().channels(camChannels).build();
    }
 
    /*
@@ -414,6 +435,11 @@ public final class AcquisitionWrapperEngine implements AcquisitionEngine {
       posList_ = posList;
    }
 
+   @Subscribe
+   public void OnNewPositionListEvent(NewPositionListEvent newPositionListEvent) {
+      posList_ = newPositionListEvent.getPositionList();
+   }
+
    @Override
    public void setParentGUI(Studio parent) {
       studio_ = parent;
@@ -434,11 +460,6 @@ public final class AcquisitionWrapperEngine implements AcquisitionEngine {
    @Override
    public void setFinished() {
       throw new UnsupportedOperationException("Not supported yet.");
-   }
-
-   @Override
-   public int getCurrentFrameCount() {
-      return sequenceSettings_.numFrames();
    }
 
    @Override
@@ -500,6 +521,13 @@ public final class AcquisitionWrapperEngine implements AcquisitionEngine {
       return core_.getChannelGroup();
    }
 
+   /**
+    * Sets the channel group in the core
+    * Replies on callbacks to update the UI as well as sequenceSettings
+    * (SequenceSettings are updated in the callback function in AcqControlDlg)
+    * @param group name of group to set as the new Channel Group
+    * @return true when successful, false if no change is needed or when the change fails
+    */
    @Override
    public boolean setChannelGroup(String group) {
       String curGroup = core_.getChannelGroup();
@@ -511,12 +539,11 @@ public final class AcquisitionWrapperEngine implements AcquisitionEngine {
       if (groupIsEligibleChannel(group)) {
          try {
             core_.setChannelGroup(group);
-            sequenceSettings_ = sequenceSettings_.copyBuilder().channelGroup(group).build();
          } catch (Exception e) {
             try {
                core_.setChannelGroup("");
             } catch (Exception ex) {
-                ReportingUtils.showError(ex);
+                ReportingUtils.logError(ex);
             }
             return false;
          }
@@ -721,6 +748,15 @@ public final class AcquisitionWrapperEngine implements AcquisitionEngine {
       return zstage_ != null && zstage_.length() > 0;
    }
 
+   /**
+    * The name of this function is a bit misleading
+    * Every channel group name provided as an argument will return
+    * true, unless the group exists and only contains a single property with
+    * propertylimits (i.e. a slider in the UI)
+    * @param group channel group name to be tested
+    * @return false if the group exists and only has a single property that has
+    *             propertylimits, true otherwise
+    */
    private boolean groupIsEligibleChannel(String group) {
       StrVector cfgs = core_.getAvailableConfigs(group);
       if (cfgs.size() == 1) {
@@ -765,7 +801,7 @@ public final class AcquisitionWrapperEngine implements AcquisitionEngine {
 
    @Subscribe
    public void onShutdownCommencing(InternalShutdownCommencingEvent event) {
-      if (!event.getIsCancelled() && isAcquisitionRunning()) {
+      if (!event.isCanceled() && isAcquisitionRunning()) {
          int result = JOptionPane.showConfirmDialog(null,
                "Acquisition in progress. Are you sure you want to exit and discard all data?",
                "Micro-Manager", JOptionPane.YES_NO_OPTION,

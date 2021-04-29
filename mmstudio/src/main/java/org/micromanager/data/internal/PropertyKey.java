@@ -23,6 +23,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.micromanager.Album;
 import org.micromanager.MultiStagePosition;
 import org.micromanager.PositionList;
 import org.micromanager.PropertyMap;
@@ -70,6 +72,8 @@ public enum PropertyKey {
             putDouble("AutoscaleIgnoredQuantile", extremaQuantile_).
             putPropertyMapList("ChannelSettings", channelSettings).
    */
+
+   ALBUM_DISPLAY_SETTINGS("AlbumDisplaySettings", Album.class),
    
    ACQUISITION_DISPLAY_SETTINGS("AcquisitionDisplaySettings", AcquisitionManager.class),
    
@@ -168,8 +172,12 @@ public enum PropertyKey {
             dest.putInteger(key(), jp.getAsInt());
          }
          if (jp.isString()) { // "1x1", "2x2", ...
-            dest.putInteger(key(),
-                  Integer.parseInt(jp.getAsString().split("x", 2)[0]));
+            String token = jp.getAsString().split("x", 2)[0];
+            if (token.length() < 3) {
+               dest.putInteger(key(), Integer.parseInt(token));
+            } else {  // another crazy format for binning, no way to figure this out
+               dest.putInteger(key(), 1);
+            }
          }
       }
 

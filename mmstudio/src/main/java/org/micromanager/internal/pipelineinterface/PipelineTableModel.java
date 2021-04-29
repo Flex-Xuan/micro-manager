@@ -21,8 +21,8 @@ import javax.swing.table.AbstractTableModel;
 import org.micromanager.PropertyMap;
 import org.micromanager.Studio;
 import org.micromanager.data.NewPipelineEvent;
-import org.micromanager.data.ProcessorConfigurator;
 import org.micromanager.data.ProcessorFactory;
+import org.micromanager.data.internal.DefaultNewPipelineEvent;
 import org.micromanager.internal.MMStudio;
 
 // TODO: currently we redraw the entire table any time it changes, rather than
@@ -78,7 +78,7 @@ public final class PipelineTableModel extends AbstractTableModel {
    @Override
    public void fireTableDataChanged() {
       super.fireTableDataChanged();
-      MMStudio.getInstance().events().post(new NewPipelineEvent());
+      MMStudio.getInstance().events().post(new DefaultNewPipelineEvent());
    }
 
    /**
@@ -110,8 +110,8 @@ public final class PipelineTableModel extends AbstractTableModel {
    public List<ConfiguratorWrapper> getEnabledConfigurators(boolean isLiveMode) {
       ArrayList<ConfiguratorWrapper> result = new ArrayList<ConfiguratorWrapper>();
       for (ConfiguratorWrapper config : pipelineConfigs_) {
-         if ((isLiveMode && config.getIsEnabledInLive()) ||
-               (!isLiveMode && config.getIsEnabled())) {
+         if ((isLiveMode && config.isEnabledInLive()) ||
+               (!isLiveMode && config.isEnabled())) {
             result.add(config);
          }
       }
@@ -175,9 +175,9 @@ public final class PipelineTableModel extends AbstractTableModel {
    public Object getValueAt(int row, int column) {
       switch (column) {
          case ENABLED_COLUMN:
-            return pipelineConfigs_.get(row).getIsEnabled();
+            return pipelineConfigs_.get(row).isEnabled();
          case ENABLED_LIVE_COLUMN:
-            return pipelineConfigs_.get(row).getIsEnabledInLive();
+            return pipelineConfigs_.get(row).isEnabledInLive();
          case NAME_COLUMN:
             return pipelineConfigs_.get(row).getName();
          case CONFIGURE_COLUMN:
@@ -189,11 +189,11 @@ public final class PipelineTableModel extends AbstractTableModel {
    @Override
    public void setValueAt(Object value, int row, int column) {
       if (column == ENABLED_COLUMN) {
-         pipelineConfigs_.get(row).setIsEnabled((Boolean) value);
+         pipelineConfigs_.get(row).setEnabled((Boolean) value);
          fireTableDataChanged();
       }
       else if (column == ENABLED_LIVE_COLUMN) {
-         pipelineConfigs_.get(row).setIsEnabledInLive((Boolean) value);
+         pipelineConfigs_.get(row).setEnabledInLive((Boolean) value);
          fireTableDataChanged();
       }
    }
@@ -232,7 +232,7 @@ public final class PipelineTableModel extends AbstractTableModel {
       for (String configString : serializedConfigs) {
          ConfiguratorWrapper config = ConfiguratorWrapper.fromString(
                configString, studio);
-         if (config.getIsEnabled()) {
+         if (config.isEnabled()) {
             didUpdate = true;
          }
          pipelineConfigs_.add(config);

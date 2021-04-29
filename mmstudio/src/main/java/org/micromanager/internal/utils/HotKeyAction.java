@@ -45,7 +45,7 @@ public final class HotKeyAction {
                   studio_.live().snap(true);
                   return true;
                case TOGGLELIVE:
-                  snapLiveManager_.setLiveMode(!snapLiveManager_.getIsLiveModeOn());
+                  snapLiveManager_.setLiveModeOn(!snapLiveManager_.isLiveModeOn());
                   return true;
                case TOGGLESHUTTER:
                   try {
@@ -63,7 +63,7 @@ public final class HotKeyAction {
                   }
                   return true;
                case MARK:
-                  studio_.markCurrentPosition();
+                  studio_.uiManager().markCurrentPosition();
                   return true;
                case AUTOSTRETCH:
                   studio_.displays().getCurrentWindow().autostretch();

@@ -45,12 +45,14 @@ import org.micromanager.data.Coords;
 import org.micromanager.data.DataProvider;
 import org.micromanager.data.Datastore;
 import org.micromanager.data.Image;
+import org.micromanager.data.ImagesDifferInSizeException;
 import org.micromanager.data.Storage;
 import org.micromanager.data.SummaryMetadata;
 import org.micromanager.data.internal.DefaultCoords;
 import org.micromanager.data.internal.DefaultDatastore;
 import org.micromanager.data.internal.DefaultImage;
 import org.micromanager.data.internal.DefaultSummaryMetadata;
+import org.micromanager.data.internal.ImageSizeChecker;
 import org.micromanager.internal.propertymap.NonPropertyMapJSONFormats;
 import org.micromanager.internal.MMStudio;
 import org.micromanager.internal.utils.MMException;
@@ -319,7 +321,10 @@ public final class StorageMultipageTiff implements Storage {
       }
       if (firstImage_ == null) {
          firstImage_ = image;
+      } else {
+         ImageSizeChecker.checkImageSizes(firstImage_, image);
       }
+
       try {
          writeImage(image, false);
       }
@@ -729,7 +734,7 @@ public final class StorageMultipageTiff implements Storage {
             return false;
          }
          for (String axis : dp.getAxes() ) {
-            if (store_.getAxisLength(axis) != dp.getAxisLength(axis)) {
+            if (store_.getNextIndex(axis) != dp.getNextIndex(axis)) {
                return false;
             }
          }
@@ -828,8 +833,18 @@ public final class StorageMultipageTiff implements Storage {
    }
 
    @Override
-   public Integer getMaxIndex(String axis) {
-      return getMaxIndices().getIndex(axis);
+   public int getMaxIndex(String axis) {
+      if (!getAxes().contains(axis)) {
+         return -1;
+      }
+
+      int maxIndex = 0;
+      for (Coords coords : coordsToReader_.keySet()) {
+         if (coords.getIndex(axis) > maxIndex) {
+            maxIndex = coords.getIndex(axis);
+         }
+      }
+      return maxIndex;
    }
 
    // Convenience function.
@@ -857,13 +872,13 @@ public final class StorageMultipageTiff implements Storage {
       HashSet<Image> result = new HashSet<>();
       synchronized(coordsToPendingImage_) {
          for (Coords imageCoords : coordsToPendingImage_.keySet()) {
-            if (imageCoords.isSubspaceCoordsOf(coords)) {
+            if (imageCoords.equals(coords)) {
                result.add(coordsToPendingImage_.get(imageCoords));
             }
          }
       }
       for (Coords imageCoords : coordsToReader_.keySet()) {
-         if (imageCoords.isSubspaceCoordsOf(coords)) {
+         if (imageCoords.equals(coords)) {
             try {
                result.add(coordsToReader_.get(imageCoords).readImage(imageCoords));
             }
@@ -874,6 +889,30 @@ public final class StorageMultipageTiff implements Storage {
       }
       return new ArrayList<>(result);
    }
+
+   @Override
+   public List<Image> getImagesIgnoringAxes(Coords coords, String... ignoreTheseAxes) throws IOException {
+      HashSet<Image> result = new HashSet<>();
+      synchronized(coordsToPendingImage_) {
+         for (Coords imageCoords : coordsToPendingImage_.keySet()) {
+            if (coords.equals(imageCoords.copyRemovingAxes(ignoreTheseAxes))) {
+               result.add(coordsToPendingImage_.get(imageCoords));
+            }
+         }
+      }
+      for (Coords imageCoords : coordsToReader_.keySet()) {
+         if (coords.equals(imageCoords.copyRemovingAxes(ignoreTheseAxes))) {
+            try {
+               result.add(coordsToReader_.get(imageCoords).readImage(imageCoords));
+            }
+            catch (IOException ex) {
+               ReportingUtils.logError("Failed to read image at " + imageCoords);
+            }
+         }
+      }
+      return new ArrayList<>(result);
+   }
+
 
    @Override
    public Image getImage(Coords coords) {

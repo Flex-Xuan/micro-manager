@@ -29,13 +29,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javax.swing.JButton;
-import javax.swing.JFormattedTextField;
-import javax.swing.JLabel;
-import javax.swing.JSpinner;
-import javax.swing.JTextField;
-import javax.swing.SpinnerNumberModel;
-import javax.swing.WindowConstants;
+import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.text.DefaultFormatter;
 import net.miginfocom.swing.MigLayout;
@@ -49,14 +43,13 @@ import org.micromanager.display.DisplayWindow;
 // maintainability. However, this plugin code is older than the current
 // MMStudio API, so it still uses internal classes and interfaces. New code
 // should not imitate this practice.
-import org.micromanager.internal.utils.MMDialog;
 import org.micromanager.internal.utils.ProgressBar;
 
 /**
  *
  * @author nico
  */
-public class DuplicatorPluginFrame extends MMDialog {
+public class DuplicatorPluginFrame extends JDialog {
    private final Studio studio_;
    private final DisplayWindow ourWindow_;
    private final DataProvider ourProvider_;
@@ -89,13 +82,13 @@ public class DuplicatorPluginFrame extends MMDialog {
          super.add(new JLabel("max"), "wrap");
 
          for (final String axis : axes) {
-            if (ourProvider_.getAxisLength(axis) > 1) {
+            if (ourProvider_.getNextIndex(axis) > 1) {
                mins.put(axis, 1);
-               maxes.put(axis, ourProvider_.getAxisLength(axis));
+               maxes.put(axis, ourProvider_.getNextIndex(axis));
 
                super.add(new JLabel(axis));
                SpinnerNumberModel model = new SpinnerNumberModel(1, 1,
-                       (int) ourProvider_.getAxisLength(axis), 1);
+                       (int) ourProvider_.getNextIndex(axis), 1);
                mins.put(axis, 0);
                final JSpinner minSpinner = new JSpinner(model);
                JFormattedTextField field = (JFormattedTextField) minSpinner.getEditor().getComponent(0);
@@ -117,9 +110,9 @@ public class DuplicatorPluginFrame extends MMDialog {
                });
                super.add(minSpinner, "wmin 60");
 
-               model = new SpinnerNumberModel((int) ourProvider_.getAxisLength(axis),
-                       1, (int) ourProvider_.getAxisLength(axis), 1);
-               maxes.put(axis, ourProvider_.getAxisLength(axis) - 1);
+               model = new SpinnerNumberModel((int) ourProvider_.getNextIndex(axis),
+                       1, (int) ourProvider_.getNextIndex(axis), 1);
+               maxes.put(axis, ourProvider_.getNextIndex(axis) - 1);
                final JSpinner maxSpinner = new JSpinner(model);
                field = (JFormattedTextField) maxSpinner.getEditor().getComponent(0);
                formatter = (DefaultFormatter) field.getFormatter();

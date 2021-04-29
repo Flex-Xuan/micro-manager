@@ -20,21 +20,24 @@
 
 package org.micromanager.events;
 
-/**
- * This class signifies when a new value is added to a config group.
- */
-public class ConfigGroupChangedEvent {
-   private final String groupName_;
-   private final String newConfig_;
+import org.micromanager.MMEvent;
 
-   public ConfigGroupChangedEvent(String groupName, String newConfig) {
-      groupName_ = groupName;
-      newConfig_ = newConfig;
-   }
-   public String getNewConfig() {
-      return newConfig_;
-   }
-   public String getGroupName() {
-      return groupName_;
-   }
+/**
+ * Event signaling that the "active" preset in a config group changed.
+ *
+ * The default implementation of this event is posted on the Studio event bus,
+ * so subscribe using {@link org.micromanager.events.EventManager}.
+ */
+public interface ConfigGroupChangedEvent extends MMEvent {
+
+   /**
+    * @return The name of the add configuration
+    */
+   String getNewConfig();
+
+   /**
+    * @return Name of the group this configuration was added to.
+    */
+   String getGroupName();
+
 }

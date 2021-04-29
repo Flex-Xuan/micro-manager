@@ -36,6 +36,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.Toolkit;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowFocusListener;
@@ -47,7 +48,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-import javax.swing.SwingUtilities;
+import javax.swing.*;
+
 import org.micromanager.LogManager;
 
 import org.micromanager.Studio;
@@ -87,7 +89,7 @@ import org.micromanager.display.internal.imagestats.ImageStatsRequest;
 import org.micromanager.display.internal.imagestats.ImagesAndStats;
 import org.micromanager.display.internal.imagestats.ImageStatsProcessor;
 import org.micromanager.display.internal.imagestats.IntegerComponentStats;
-import org.micromanager.internal.utils.MMFrame;
+import org.micromanager.internal.utils.WindowPositioning;
 
 import static org.micromanager.data.internal.BufferTools.NATIVE_ORDER;
 
@@ -117,10 +119,13 @@ public class CVViewer implements DataViewer, ImageStatsPublisher {
             Color.PINK, Color.CYAN, Color.YELLOW, Color.ORANGE};
    
    
-   private class CVFrame extends MMFrame {
+   private class CVFrame extends JFrame {
       public CVFrame() {
          super();
-         super.loadAndRestorePosition(100, 100);
+         super.setIconImage(Toolkit.getDefaultToolkit().getImage(
+                 getClass().getResource("/org/micromanager/icons/microscope.gif")));
+         super.setLocation(100, 100);
+         WindowPositioning.setUpLocationMemory(this, this.getClass(), null);
       }
    }
    
@@ -192,7 +197,7 @@ public class CVViewer implements DataViewer, ImageStatsPublisher {
       try {
          maxValue_ = 1 << dataProvider_.getAnyImage().getMetadata().getBitDepth();
 
-         final int nrCh = dataProvider_.getAxisLength(Coords.CHANNEL);
+         final int nrCh = dataProvider_.getNextIndex(Coords.CHANNEL);
 
          DisplaySettings.Builder dsb = ds.copyBuilder();
          for (int ch = 0; ch < ds.getNumberOfChannels(); ch++) {
@@ -323,7 +328,7 @@ public class CVViewer implements DataViewer, ImageStatsPublisher {
    }
 
    private void setOneChannelVisible(int chToBeVisible) {
-      for (int ch = 0; ch < dataProvider_.getAxisLength(Coords.CHANNEL); ch++) {
+      for (int ch = 0; ch < dataProvider_.getNextIndex(Coords.CHANNEL); ch++) {
          boolean setVisible = false;
          if (ch == chToBeVisible) {
             setVisible = true;
@@ -333,7 +338,7 @@ public class CVViewer implements DataViewer, ImageStatsPublisher {
    }
    
    private void setAllChannelsVisible() {
-      for (int ch = 0; ch < dataProvider_.getAxisLength(Coords.CHANNEL); ch++) {
+      for (int ch = 0; ch < dataProvider_.getNextIndex(Coords.CHANNEL); ch++) {
          clearVolumeRenderer_.setLayerVisible(ch, true);
       }
    }
@@ -353,7 +358,7 @@ public class CVViewer implements DataViewer, ImageStatsPublisher {
             setOneChannelVisible(activeChannel_); // todo: get the channel selected in the slider
          }
       }
-      for (int ch = 0; ch < dataProvider_.getAxisLength(Coords.CHANNEL); ch++ ) {
+      for (int ch = 0; ch < dataProvider_.getNextIndex(Coords.CHANNEL); ch++ ) {
          if ( displaySettings_.isChannelVisible(ch) != ds.isChannelVisible(ch)) {
             clearVolumeRenderer_.setLayerVisible(ch, ds.isChannelVisible(ch) );
          }
@@ -464,8 +469,8 @@ public class CVViewer implements DataViewer, ImageStatsPublisher {
    @Override
    public List<Image> getDisplayedImages() throws IOException {
       List<Image> imageList = new ArrayList<>();
-      final int nrZ = dataProvider_.getAxisLength(Coords.Z);
-      final int nrCh = dataProvider_.getAxisLength(Coords.CHANNEL);
+      final int nrZ = dataProvider_.getNextIndex(Coords.Z);
+      final int nrCh = dataProvider_.getNextIndex(Coords.CHANNEL);
       for (int ch = 0; ch < nrCh; ch++) {
          /*
          // return the complete stack
@@ -505,8 +510,8 @@ public class CVViewer implements DataViewer, ImageStatsPublisher {
       Image randomImage = dataProvider_.getAnyImage();
       final Metadata metadata = randomImage.getMetadata();
       final SummaryMetadata summary = dataProvider_.getSummaryMetadata();
-      final int nrZ = dataProvider_.getAxisLength(Coords.Z);
-      final int nrCh = dataProvider_.getAxisLength(Coords.CHANNEL);
+      final int nrZ = dataProvider_.getNextIndex(Coords.Z);
+      final int nrCh = dataProvider_.getNextIndex(Coords.CHANNEL);
 
       clearVolumeRenderer_.setVolumeDataUpdateAllowed(false);
 
@@ -744,7 +749,7 @@ public class CVViewer implements DataViewer, ImageStatsPublisher {
       if (extremaPercentage < 0.0) {
          extremaPercentage = 0.0;
       }
-      for (int ch = 0; ch < dataProvider_.getAxisLength(Coords.CHANNEL); ++ch) {
+      for (int ch = 0; ch < dataProvider_.getNextIndex(Coords.CHANNEL); ++ch) {
          Image image = dataProvider_.getImage(baseCoords.copyBuilder().channel(ch).build());
          if (image != null) {
             ChannelDisplaySettings.Builder csCopyBuilder = 
@@ -773,7 +778,7 @@ public class CVViewer implements DataViewer, ImageStatsPublisher {
      
    @Subscribe
    public void onShutdownCommencing(ShutdownCommencingEvent sce) {
-      if (cvFrame_ != null) {
+      if (!sce.isCanceled() && cvFrame_ != null) {
          cleanup();
       }
    }
@@ -916,7 +921,7 @@ public class CVViewer implements DataViewer, ImageStatsPublisher {
       // Only compute the statistic for the middle coordinates, otherwise the 
       // computation is too slow
       // TODO: figure out how to compute the whole histogram in the background
-      int middleSlice = dataProvider_.getAxisLength(Coords.Z) / 2;
+      int middleSlice = dataProvider_.getNextIndex(Coords.Z) / 2;
       
       Coords position = lastDisplayedCoords_.copyBuilder().z(middleSlice).build();
       

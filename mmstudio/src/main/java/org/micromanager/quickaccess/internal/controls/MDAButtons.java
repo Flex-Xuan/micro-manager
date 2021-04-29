@@ -34,8 +34,8 @@ import net.miginfocom.swing.MigLayout;
 import org.micromanager.PropertyMap;
 import org.micromanager.PropertyMaps;
 import org.micromanager.Studio;
-import org.micromanager.events.AcquisitionEndedEvent;
-import org.micromanager.events.AcquisitionStartedEvent;
+import org.micromanager.acquisition.AcquisitionEndedEvent;
+import org.micromanager.acquisition.AcquisitionStartedEvent;
 import org.micromanager.internal.MMStudio;
 import org.micromanager.internal.utils.GUIUtils;
 import org.micromanager.quickaccess.QuickAccessPlugin;
@@ -99,7 +99,7 @@ public final class MDAButtons extends WidgetPlugin implements SciJavaPlugin {
       dialogButton.addActionListener(new ActionListener() {
          @Override
          public void actionPerformed(ActionEvent e) {
-            studio_.openAcqControlDialog();
+            studio_.uiManager().openAcqControlDialog();
          }
       });
       dialogButton.setFont(GUIUtils.buttonFont);

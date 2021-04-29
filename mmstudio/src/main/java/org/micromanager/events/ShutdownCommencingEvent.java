@@ -20,25 +20,38 @@
 
 package org.micromanager.events;
 
-/**
- * This event is posted when the user requests the program to shut down. It
- * gives subscribers the opportunity to cancel shutdown (ideally only to ensure
- * that data can be saved or other similarly-critical decisions).
- */
-public class ShutdownCommencingEvent {
-   private boolean isCancelled_ = false;
+import org.micromanager.MMEvent;
 
+/**
+ * This event posts when the user requests the program to shut down.
+ *
+ * It gives subscribers the opportunity to cancel shutdown (ideally only to
+ * ensure that data can be saved or other similarly-critical decisions).
+ *
+ * All subscribers must first check if the shutdown has been canceled by
+ * calling {@link #isCanceled()}. If the shutdown has been canceled, the
+ * event must be ignored.
+ *
+ * The default implementation of this event posts on the Studio event bus,
+ * so subscribe using {@link org.micromanager.events.EventManager}.
+ */
+public interface ShutdownCommencingEvent extends MMEvent {
    /**
     * Cancel shutdown.
     */
-   public void cancelShutdown() {
-      isCancelled_ = true;
-   }
+   void cancelShutdown();
 
    /**
-    * Return whether or not shutdown has been cancelled.
+    * Return whether or not shutdown has been canceled.
+    * @return true when shutdown was canceled
     */
-   public boolean getIsCancelled() {
-      return isCancelled_;
-   }
+   boolean isCanceled();
+
+
+   /**
+    * @return true when shutdown was canceled
+    * @deprecated use {@link #isCanceled()} instead
+    */
+   @Deprecated
+   boolean getIsCancelled();
 }

@@ -550,18 +550,10 @@ public final class ImageJBridge {
       // Normally, return the currently displayed images cached by the UI
       // controller.
       List<Image> images = uiController_.getDisplayedImages();
-      IMAGES: for (Image image : images) {
-         Coords c = image.getCoords();
-         // We are making the assumption that no two displayed images share
-         // the same TZC coordinates. This is true for mono/composite/RGB 2D
-         // viewer, but may need refinement upon future ganaralizations or new
-         // viewers (e.g. a Z-projecting viewer)
-         for (String axis : coords.getAxes()) {
-            if (coords.getIndex(axis) != c.getIndex(axis)) {
-               continue IMAGES;
-            }
+      for (Image image: images) {
+         if (coords.equals(image.getCoords())) {
+            return image;
          }
-         return image;
       }
       // TODO When enabling missing image strategies, we need to map back to
       // the image assigned to the nominal coordinates
@@ -839,7 +831,7 @@ public final class ImageJBridge {
       if (oldCanvasWidth < 0.95 * Math.floor(imageWidth * oldZoomRatio)) {
          ret.width = oldCanvasWidth;
       }
-      if (oldCanvasHeight < 0.95 * Math.floor(imageHeight* oldZoomRatio)) {
+      if (oldCanvasHeight < 0.95 * Math.floor(imageHeight * oldZoomRatio)) {
          ret.height = oldCanvasHeight;
       }
       return ret;

@@ -3,23 +3,9 @@ package org.micromanager.internal.dialogs;
 import org.micromanager.Studio;
 import org.micromanager.acquisition.internal.AcquisitionEngine;
 import org.micromanager.internal.utils.DaytimeNighttime;
-import org.micromanager.internal.utils.MMDialog;
 import org.micromanager.internal.utils.TooltipTextMaker;
 
-import javax.swing.BoxLayout;
-import javax.swing.DefaultComboBoxModel;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JFormattedTextField;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JSpinner;
-import javax.swing.JTable;
-import javax.swing.SpinnerModel;
-import javax.swing.SpinnerNumberModel;
+import javax.swing.*;
 import javax.swing.event.CaretEvent;
 import javax.swing.event.CaretListener;
 import javax.swing.event.ChangeEvent;
@@ -184,13 +170,14 @@ public final class CustomTimeIntervalsPanel extends JPanel {
         buttonsPanel_.add(new JLabel("      ")); //spacer
         
         useIntervalsCheckBox_ = new JCheckBox("Use custom intervals");
-        useIntervalsCheckBox_.setEnabled(acqEng_.getSequenceSettings().customIntervalsMs != null);
-        useIntervalsCheckBox_.setSelected(acqEng_.getSequenceSettings().useCustomIntervals);
+        useIntervalsCheckBox_.setEnabled(acqEng_.getSequenceSettings().customIntervalsMs() != null);
+        useIntervalsCheckBox_.setSelected(acqEng_.getSequenceSettings().useCustomIntervals());
         buttonsPanel_.add(useIntervalsCheckBox_);
         useIntervalsCheckBox_.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                acqEng_.getSequenceSettings().useCustomIntervals = useIntervalsCheckBox_.isSelected();
+                acqEng_.setSequenceSettings(acqEng_.getSequenceSettings().copyBuilder().
+                        useCustomIntervals(useIntervalsCheckBox_.isSelected()).build());
             }
         });
         
@@ -209,15 +196,15 @@ public final class CustomTimeIntervalsPanel extends JPanel {
     }
  
      public void syncCheckBoxFromAcqEng() {
-         useIntervalsCheckBox_.setEnabled(acqEng_.getSequenceSettings().customIntervalsMs != null);
-         useIntervalsCheckBox_.setSelected(acqEng_.getSequenceSettings().useCustomIntervals);
+         useIntervalsCheckBox_.setEnabled(acqEng_.getSequenceSettings().customIntervalsMs() != null);
+         useIntervalsCheckBox_.setSelected(acqEng_.getSequenceSettings().useCustomIntervals());
      }  
      
      public void syncIntervalsFromAcqEng() {
          intervalTableModel_.syncIntervalsFromAcqEng();
      }
 
-    private class LogTimeDialog extends MMDialog {
+    private class LogTimeDialog extends JDialog {
 
 
         private JComboBox creationTypeCombo_;
@@ -233,7 +220,7 @@ public final class CustomTimeIntervalsPanel extends JPanel {
        private int n_;
 
         public LogTimeDialog() {
-            super("logarithmic spacing");
+            super();
             this.setModal(true);
             this.setSize(new Dimension(520, 300));
             this.setResizable(false);
@@ -578,7 +565,7 @@ public final class CustomTimeIntervalsPanel extends JPanel {
         }
     }
 
-    private class LinearTimeDialog extends MMDialog {
+    private class LinearTimeDialog extends JDialog {
 
         private JSpinner numFrames_;
         private JFormattedTextField interval_;
@@ -586,7 +573,7 @@ public final class CustomTimeIntervalsPanel extends JPanel {
         private JComboBox creationTypeCombo_;
 
         public LinearTimeDialog() {
-            super("linear spacing");
+            super();
             this.setModal(true);
             this.setSize(new Dimension(350, 200));
             this.setResizable(false);
@@ -748,21 +735,23 @@ public final class CustomTimeIntervalsPanel extends JPanel {
         
         private void sendIntervalsToAcqEng() {
             if (timeIntervals_ == null || timeIntervals_.isEmpty()) {
-                acqEng_.getSequenceSettings().customIntervalsMs = null;
+               acqEng_.setSequenceSettings(acqEng_.getSequenceSettings().copyBuilder().
+                    customIntervalsMs(null).build());
             } else {
                 ArrayList<Double> intervals = new ArrayList<>(timeIntervals_.size());
                for (Double aDouble : timeIntervals_) {
                   intervals.add(aDouble);
                }
-                acqEng_.getSequenceSettings().customIntervalsMs = intervals;
+               acqEng_.setSequenceSettings(acqEng_.getSequenceSettings().copyBuilder().
+                       customIntervalsMs(intervals).build());
             }
            fireTableDataChanged();
         }
         
         public final void syncIntervalsFromAcqEng() {
             timeIntervals_.clear();
-            if (acqEng_.getSequenceSettings().customIntervalsMs != null) {
-               timeIntervals_.addAll(acqEng_.getSequenceSettings().customIntervalsMs);
+            if (acqEng_.getSequenceSettings().customIntervalsMs() != null) {
+               timeIntervals_.addAll(acqEng_.getSequenceSettings().customIntervalsMs());
             }
             fireTableDataChanged();
         }

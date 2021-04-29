@@ -56,7 +56,7 @@ import org.micromanager.data.Image;
 import org.micromanager.Studio;
 import org.micromanager.data.DataProviderHasNewImageEvent;
 import org.micromanager.display.DataViewer;
-import org.micromanager.events.AcquisitionStartedEvent;
+import org.micromanager.acquisition.AcquisitionStartedEvent;
 import org.micromanager.events.LiveModeEvent;
 
 import ij.gui.Roi;
@@ -147,7 +147,7 @@ public class RTIntensitiesFrame extends JFrame {
             return;
          }
          dataProvider_ = viewer.getDataProvider();
-         channels_ = dataProvider_.getAxisLength("channel");
+         channels_ = dataProvider_.getNextIndex("channel");
          // At least one ROI defined ?
          if (manager_ == null) {
             title_.setText("Please setup ROI(s).");
@@ -235,7 +235,7 @@ public class RTIntensitiesFrame extends JFrame {
    	if (! autoStart_  || manager_ == null) {
    		return;
    	}
-   	if (!event.getIsOn()) {
+   	if (!event.isOn()) {
    		return;
    	}
       DataViewer viewer = studio_.displays().getActiveDataViewer();
@@ -243,7 +243,7 @@ public class RTIntensitiesFrame extends JFrame {
       	return;
       }
       dataProvider_ = viewer.getDataProvider();
-      channels_ = dataProvider_.getAxisLength("channel");
+      channels_ = dataProvider_.getNextIndex("channel");
       ROIs_ = manager_.getCount();
       if (ROIs_ <= 0) {
       	return;

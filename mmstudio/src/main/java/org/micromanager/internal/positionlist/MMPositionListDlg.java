@@ -20,9 +20,8 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import org.micromanager.PositionList;
 import org.micromanager.Studio;
-import org.micromanager.events.internal.DefaultNewPositionListEvent;
+import org.micromanager.events.NewPositionListEvent;
 import org.micromanager.events.internal.InternalShutdownCommencingEvent;
-import org.micromanager.internal.dialogs.AcqControlDlg;
 
 /**
  * The MMPositionListDlg class extends PositionListDlg to be used as the singleton PositionListDlg used in the MMStudio API
@@ -32,12 +31,10 @@ import org.micromanager.internal.dialogs.AcqControlDlg;
  *   3: Save preferences to the MMStudio UserProfile.
  */
 public final class MMPositionListDlg extends PositionListDlg {
-    AcqControlDlg acd_;
-    
-    public MMPositionListDlg(Studio studio, PositionList posList, AcqControlDlg acd) {
+
+    public MMPositionListDlg(Studio studio, PositionList posList) {
         super(studio, posList);
-        acd_ = acd;
-        
+
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent arg0) {
@@ -49,9 +46,8 @@ public final class MMPositionListDlg extends PositionListDlg {
     
     @Override
     protected void updatePositionData() {
+        studio_.positions().setPositionList(getPositionList());
         super.updatePositionData();
-        acd_.updateGUIContents();
-        studio_.events().post(new DefaultNewPositionListEvent(getPositionList()));
     }
     
     private void saveDims() {
@@ -63,11 +59,19 @@ public final class MMPositionListDlg extends PositionListDlg {
             axisCol0Width);
    }
     
-    @Subscribe
+   @Subscribe
    public void onShutdownCommencing(InternalShutdownCommencingEvent event) {
-      if (!event.getIsCancelled()) {
+      if (!event.isCanceled()) {
          saveDims();
          dispose();
       }
    }   
+   
+   @Subscribe
+   public void onNewPositionList(NewPositionListEvent nple) {
+       PositionList pl = nple.getPositionList();
+       if (this.getPositionList() != pl) { // Without this check we will enter an infinite loop.
+            this.setPositionList(nple.getPositionList());
+       }
+   }
 }

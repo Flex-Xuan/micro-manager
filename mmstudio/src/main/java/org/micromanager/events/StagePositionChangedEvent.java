@@ -20,29 +20,25 @@
 
 package org.micromanager.events;
 
-/**
- * This class signals when a single-axis drive has moved. 
- */
-public class StagePositionChangedEvent {
-   private final String deviceName_;
-   private final double pos_;
+import org.micromanager.MMEvent;
 
-   public StagePositionChangedEvent(String deviceName, double pos) {
-      deviceName_ = deviceName;
-      pos_ = pos;
-   }
+/**
+ * This class signals when a single-axis drive has moved.
+ *
+ * The default implementation of this event posts on the Studio event bus,
+ * so subscribe using {@link org.micromanager.events.EventManager}.
+ */
+public interface StagePositionChangedEvent extends MMEvent {
+
+
    /**
-    * The new (current) position of the stage
-    * @return 
+    * @return The new (current) position of the stage
     */
-   public double getPos() {
-      return pos_;
-   }
+   double getPos();
+
    /**
-    * Name of the stage that moved
-    * @return 
+    * @return Name of the stage that moved
     */
-   public String getDeviceName() {
-      return deviceName_;
-   }
+   String getDeviceName();
+
 }

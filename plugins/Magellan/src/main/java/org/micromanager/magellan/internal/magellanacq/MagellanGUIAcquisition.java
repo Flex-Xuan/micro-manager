@@ -36,6 +36,7 @@ import org.micromanager.magellan.internal.gui.GUI;
 import org.micromanager.magellan.internal.main.Magellan;
 import org.micromanager.magellan.internal.misc.Log;
 import org.micromanager.magellan.internal.surfacesandregions.Point3d;
+import org.micromanager.multiresstorage.StorageAPI;
 
 /**
  *
@@ -70,7 +71,7 @@ public class MagellanGUIAcquisition extends Acquisition implements MagellanAcqui
 
    public void start() {
          super.start();
-         if (finished_) {
+         if (eventsFinished_) {
             throw new RuntimeException("Cannot start acquistion since it has already been run");
          }
          Iterator<AcquisitionEvent> acqEventIterator = buildAcqEventGenerator();
@@ -105,6 +106,19 @@ public class MagellanGUIAcquisition extends Acquisition implements MagellanAcqui
          //add metadata about surface
          MagellanMD.setSurfacePoints(tags, getFixedSurfacePoints());
       }
+   }
+
+   //Called by pycromanager
+   public StorageAPI getStorage() {
+      return dataSink_ == null ? null : ((MagellanDataManager) dataSink_).getStorage();
+   }
+
+   @Override
+   public boolean isFinished() {
+      if (dataSink_ != null) {
+         return dataSink_.isFinished();
+      }
+      return true;
    }
 
    private Iterator<AcquisitionEvent> buildAcqEventGenerator() {
@@ -156,7 +170,6 @@ public class MagellanGUIAcquisition extends Acquisition implements MagellanAcqui
          acqFunctions.add(MagellanZStack());
       }
       AcquisitionEvent baseEvent = new AcquisitionEvent(this);
-      baseEvent.setAxisPosition(MagellanMD.POSITION_AXIS, 0);
       return new AcquisitionEventIterator(baseEvent, acqFunctions, monitorSliceIndices());
    }
 
@@ -288,9 +301,11 @@ public class MagellanGUIAcquisition extends Acquisition implements MagellanAcqui
       if (spaceMode == MagellanGUIAcquisitionSettings.SURFACE_FIXED_DISTANCE_Z_STACK) {
          boolean extrapolate = settings.fixedSurface_ != settings.xyFootprint_;
          //extrapolate only if different surface used for XY positions than footprint
-         return settings.fixedSurface_.isPositionCompletelyAboveSurface(positionCorners, settings.fixedSurface_, zPos + settings.distanceAboveFixedSurface_, extrapolate);
+         return settings.fixedSurface_.isPositionCompletelyAboveSurface(positionCorners, settings.fixedSurface_,
+                 zPos + settings.distanceAboveFixedSurface_, extrapolate);
       } else if (spaceMode == MagellanGUIAcquisitionSettings.VOLUME_BETWEEN_SURFACES_Z_STACK) {
-         return settings.topSurface_.isPositionCompletelyAboveSurface(positionCorners, settings.topSurface_, zPos + settings.distanceAboveTopSurface_, false);
+         return settings.topSurface_.isPositionCompletelyAboveSurface(positionCorners, settings.topSurface_,
+                 zPos + settings.distanceAboveTopSurface_, false);
       } else if (spaceMode == MagellanGUIAcquisitionSettings.CUBOID_Z_STACK) {
          return zPos < settings.zStart_;
       } else {
@@ -305,10 +320,12 @@ public class MagellanGUIAcquisition extends Acquisition implements MagellanAcqui
          boolean extrapolate = settings.fixedSurface_ != settings.xyFootprint_;
          //extrapolate only if different surface used for XY positions than footprint
          return settings.fixedSurface_.isPositionCompletelyBelowSurface(
-                 positionCorners, settings.fixedSurface_, zPos - settings.distanceBelowFixedSurface_, extrapolate);
+                 positionCorners, settings.fixedSurface_, zPos - settings.distanceBelowFixedSurface_,
+                 extrapolate);
       } else if (spaceMode == MagellanGUIAcquisitionSettings.VOLUME_BETWEEN_SURFACES_Z_STACK) {
          return settings.bottomSurface_.isPositionCompletelyBelowSurface(
-                 positionCorners, settings.bottomSurface_, zPos - settings.distanceBelowBottomSurface_, false);
+                 positionCorners, settings.bottomSurface_, zPos - settings.distanceBelowBottomSurface_,
+                 false);
       } else if (spaceMode == MagellanGUIAcquisitionSettings.CUBOID_Z_STACK) {
          return zPos > settings.zEnd_;
       } else {

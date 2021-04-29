@@ -33,6 +33,7 @@ import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
@@ -57,18 +58,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.swing.DefaultComboBoxModel;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JSpinner;
-import javax.swing.JTabbedPane;
-import javax.swing.JTextField;
-import javax.swing.JToggleButton;
-import javax.swing.SpinnerNumberModel;
+import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.text.DefaultFormatter;
 
@@ -77,16 +67,14 @@ import mmcorej.Configuration;
 import mmcorej.DeviceType;
 import net.miginfocom.swing.MigLayout;
 
-import org.micromanager.PropertyMap;
 import org.micromanager.Studio;
-import org.micromanager.data.DataProvider;
 import org.micromanager.data.Datastore;
-import org.micromanager.data.Image;
 import org.micromanager.display.DataViewer;
-import org.micromanager.events.AcquisitionEndedEvent;
-import org.micromanager.events.AcquisitionStartedEvent;
+import org.micromanager.acquisition.AcquisitionEndedEvent;
+import org.micromanager.acquisition.AcquisitionStartedEvent;
 import org.micromanager.events.SLMExposureChangedEvent;
 import org.micromanager.events.ShutdownCommencingEvent;
+import org.micromanager.internal.utils.WindowPositioning;
 import org.micromanager.propertymap.MutablePropertyMapView;
 
 import org.micromanager.projector.internal.devices.SLM;
@@ -99,7 +87,6 @@ import org.micromanager.projector.Mapping;
 // maintainability. However, this plugin code is older than the current
 // MMStudio API, so it still uses internal classes and interfaces. New code
 // should not imitate this practice.
-import org.micromanager.internal.utils.MMFrame;
 import org.micromanager.internal.utils.FileDialogs;
 import org.micromanager.internal.utils.FileDialogs.FileType;
 import org.micromanager.display.internal.event.DataViewerDidBecomeActiveEvent;
@@ -109,7 +96,7 @@ import org.micromanager.display.internal.event.DisplayMouseEvent;
  * The main window for the Projector plugin. Contains logic for calibration,
  * and control for SLMs and Galvos.
 */
-public class ProjectorControlForm extends MMFrame {
+public class ProjectorControlForm extends JFrame {
    private static ProjectorControlForm formSingleton_;
    private final ProjectorControlExecution projectorControlExecution_;
    private final Object studioEventHandler_;
@@ -135,19 +122,19 @@ public class ProjectorControlForm extends MMFrame {
    private String logFile_;
    private BufferedWriter mdaLogFileWriter_;
    private String mdaLogFile_;
-   
-   
-   private static final SimpleDateFormat LOGFILEDATE_FORMATTER = 
+
+
+   private static final SimpleDateFormat LOGFILEDATE_FORMATTER =
            new SimpleDateFormat("yyyyMMdd");
-   private static final SimpleDateFormat LOGTIME_FORMATTER = 
+   private static final SimpleDateFormat LOGTIME_FORMATTER =
            new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-   
+
 
    public static final FileType PROJECTOR_LOG_FILE = new FileType("PROJECTOR_LOG_FILE",
-      "Projector Log File", "./MyProjector.log", true, "log");
-  
-   
-    // GUI element variables declaration 
+           "Projector Log File", "./MyProjector.log", true, "log");
+
+
+   // GUI element variables declaration
    private javax.swing.JButton allPixelsButton_;
    private javax.swing.JTabbedPane attachToMdaTabbedPane_;
    private javax.swing.JButton calibrateButton_;
@@ -182,8 +169,8 @@ public class ProjectorControlForm extends MMFrame {
    private javax.swing.JLabel startTimeUnitLabel_;
    private javax.swing.JPanel syncRoiPanel_;
    private javax.swing.JCheckBox useInMDAcheckBox;
-   
-    /**
+
+   /**
     * Constructor. Creates the main window for the Projector plugin.
     */
    private ProjectorControlForm(CMMCore core, Studio app) {
@@ -240,7 +227,9 @@ public class ProjectorControlForm extends MMFrame {
 
          @Subscribe
          public void onShutdownStarting(ShutdownCommencingEvent sce) {
-            dispose();
+            if (!sce.isCanceled()) {
+               dispose();
+            }
          }
 
          @Subscribe
@@ -278,10 +267,13 @@ public class ProjectorControlForm extends MMFrame {
       delayField_.setText(settings_.getString(Terms.DELAY, "0"));
       logDirectoryTextField_.setText(settings_.getString(Terms.LOGDIRECTORY, ""));
 
-      super.loadAndRestorePosition(500, 300);
+      super.setIconImage(Toolkit.getDefaultToolkit().getImage(
+              getClass().getResource("/org/micromanager/icons/microscope.gif")));
+      super.setLocation(500, 300);
+      WindowPositioning.setUpLocationMemory(this, this.getClass(), null);
       updateROISettings();
    }
-   
+
    // Show the form, which is a singleton.
    public static ProjectorControlForm showSingleton(CMMCore core, Studio app) {
       if (formSingleton_ == null) {
@@ -290,18 +282,19 @@ public class ProjectorControlForm extends MMFrame {
       formSingleton_.setVisible(true);
       return formSingleton_;
    }
-   
+
    /**
-    * The ProjectorControlExecution object carries out the "business" side 
+    * The ProjectorControlExecution object carries out the "business" side
     * of the projector. Use it for scripting, etc..
-    * @return 
+    *
+    * @return
     */
    public ProjectorControlExecution exec() {
       return projectorControlExecution_;
    }
-   
+
    // ## Methods for handling targeting channel and shutter
-   
+
    /**
     * Reads the available channels from Micro-Manager Channel Group
     * and populates the targeting channel drop-down menu.
@@ -341,20 +334,20 @@ public class ProjectorControlForm extends MMFrame {
          shutterComboBox_.setSelectedItem(initialShutter);
       }
    }
-   
+
    /**
     * Sets the targeting channel. channelName should be
     * a channel from the current ChannelGroup.
     */
    void setTargetingChannel(String channelName) {
       targetingChannel_ = channelName;
-       if (channelName != null) {
-          settings_.putString("channel", channelName);
-       }
+      if (channelName != null) {
+         settings_.putString("channel", channelName);
+      }
    }
-   
+
    /**
-    * Sets the targeting shutter. 
+    * Sets the targeting shutter.
     * Should be the name of a loaded Shutter device.
     */
    void setTargetingShutter(String shutterName) {
@@ -362,8 +355,7 @@ public class ProjectorControlForm extends MMFrame {
       settings_.putString("shutter", shutterName);
       dev_.setExternalShutter(shutterName);
    }
-   
-  
+
    /**
     * Runs the full calibration. First
     * generates a linear mapping (a first approximation) and then generates
@@ -371,30 +363,45 @@ public class ProjectorControlForm extends MMFrame {
     * the mapping to Java Preferences.
     */
    public void runCalibration() {
+      runCalibration(false);
+   }
+  
+   /**
+    * Runs the full calibration. First
+    * generates a linear mapping (a first approximation) and then generates
+    * a second piece-wise "non-linear" mapping of affine transforms. Saves
+    * the mapping to Java Preferences.
+    */
+   public void runCalibration(boolean blocking) {
       settings_.putString(Terms.DELAY, delayField_.getText());
       if (calibrator_ != null && calibrator_.isCalibrating()) {
          return;
       }
       calibrator_ = new Calibrator(studio_, dev_, settings_);
       Future<Boolean> runCalibration = calibrator_.runCalibration();
-      new Thread() {
+      Thread t = new Thread() {
          @Override
          public void run() {
             Boolean success;
             try {
-                success = runCalibration.get();
+               success = runCalibration.get();
             } catch (InterruptedException | ExecutionException ex) {
                success = false;
             }
             if (success) {
                mapping_ = MappingStorage.loadMapping(core_, dev_, settings_.toPropertyMap());
             }
-            JOptionPane.showMessageDialog(IJ.getImage().getWindow(), "Calibration "
-                       + (success ? "finished." : "canceled."));
+            studio_.alerts().postAlert("Projector Calibration", this.getClass(),
+                    "Calibration " + (success ? "succeeded." : "failed."));
             calibrateButton_.setText("Calibrate");
             calibrator_ = null;
          }
-      }.start();
+      };
+      if (blocking) {
+         t.run();
+      } else {
+         t.start();
+      }
    }
    
    /**
@@ -420,7 +427,7 @@ public class ProjectorControlForm extends MMFrame {
 
    /** Flips a point if the image was mirrored.
     *   TODO: also correct for rotation..
-   */
+   *
    private Point mirrorIfNecessary(DataViewer dv, Point pOffscreen) {
       boolean isImageMirrored = false;
       int imageWidth = 0;
@@ -448,6 +455,7 @@ public class ProjectorControlForm extends MMFrame {
          return pOffscreen;
       }
    }
+    */
    
 
    @Subscribe
@@ -460,33 +468,43 @@ public class ProjectorControlForm extends MMFrame {
               dme.getEvent().isShiftDown() && 
               dme.getEvent().getButton() == 1) {
          // System.out.println("" + dme.getEvent().getID()+ " " + dme.getEvent().paramString());
-         if (studio_.acquisitions().isAcquisitionRunning() || studio_.live().getIsLiveModeOn()) {
+         if (studio_.acquisitions().isAcquisitionRunning() || studio_.live().isLiveModeOn()) {
             Point2D p2D = dme.getCenterLocation();
-            Point p = new Point ((int) Math.round(p2D.getX()), (int) Math.round(p2D.getY()));
-            // Is this needed?
-            p = mirrorIfNecessary(pointAndShootViewer_, p);
-            Integer binning = null;
-            Rectangle roi = null;
-            try {
-               binning = Utils.getBinning(core_);
-               roi = core_.getROI();
-            } catch (Exception ex) {
-               studio_.logs().logError(ex);
-            }
-            final Point2D.Double devP = ProjectorActions.transformPoint(
-                    MappingStorage.loadMapping(core_, dev_, settings_.toPropertyMap()),
-                    new Point2D.Double(p.getX(), p.getY()), roi, binning);
-            final Configuration originalConfig
-                    = projectorControlExecution_.prepareChannel(targetingChannel_);
-            PointAndShootInfo.Builder psiBuilder = new PointAndShootInfo.Builder();
-            PointAndShootInfo psi = psiBuilder.projectionDevice(dev_).
-                    devPoint(devP).
-                    originalConfig(originalConfig).
-                    canvasPoint(new Point((int) p2D.getX(), (int) p2D.getY())).
-                    build();
-            pointAndShootQueue_.add(psi);
+            addPointToPointAndShootQueue(p2D);
          }
       }
+   }
+
+   /**
+    * Adds a poingt in image space to the point and shoot queue
+    *
+    * @param p2D 2D point on an image produced with the current camera settings
+    *            Point will be mapped to corresponding point in Projector coordinates
+    */
+   public void addPointToPointAndShootQueue(Point2D p2D) {
+      Point p = new Point ((int) Math.round(p2D.getX()), (int) Math.round(p2D.getY()));
+      // Is this needed?
+      // p = mirrorIfNecessary(pointAndShootViewer_, p);
+      Integer binning = null;
+      Rectangle roi = null;
+      try {
+         binning = Utils.getBinning(core_);
+         roi = core_.getROI();
+      } catch (Exception ex) {
+         studio_.logs().logError(ex);
+      }
+      final Point2D.Double devP = ProjectorActions.transformPoint(
+              MappingStorage.loadMapping(core_, dev_, settings_.toPropertyMap()),
+              new Point2D.Double(p.getX(), p.getY()), roi, binning);
+      final Configuration originalConfig
+              = projectorControlExecution_.prepareChannel(targetingChannel_);
+      PointAndShootInfo.Builder psiBuilder = new PointAndShootInfo.Builder();
+      PointAndShootInfo psi = psiBuilder.projectionDevice(dev_).
+              devPoint(devP).
+              originalConfig(originalConfig).
+              canvasPoint(new Point((int) p2D.getX(), (int) p2D.getY())).
+              build();
+      pointAndShootQueue_.add(psi);
    }
 
    
@@ -1341,7 +1359,7 @@ public class ProjectorControlForm extends MMFrame {
    /**
     * Illuminate the polygons ROIs that have been previously uploaded to
     * phototargeter.
-    * @deprecated Use {@link ProjectorControlExecution#exposeRois(org.micromanager.projector.ProjectionDevice, java.lang.String, java.lang.String) } instead
+    * @deprecated Use {@link ProjectorControlExecution#exposeRois(org.micromanager.projector.ProjectionDevice, java.lang.String, java.lang.String, Roi[]) } instead
     */
    @Deprecated
    public void runRois() {

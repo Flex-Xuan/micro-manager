@@ -19,10 +19,19 @@
 //               INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 package org.micromanager.data;
 
+import org.micromanager.MMEvent;
+
 /**
+ * This event posts when the DataStore gets a new name, i.e. when
+ * {@link Datastore#setName(String)} is called
  *
- * @author nico
+ * The default implementation of this Event posts on the Datastore
+ * event bus.  Subscribe using {@link DataProvider#registerForEvents(Object)}.
  */
-public interface DataProviderHasNewNameEvent {
-   public String getNewName();
+public interface DataProviderHasNewNameEvent extends MMEvent {
+
+   /**
+    * @return The new name of the DataProvider.
+    */
+   String getNewName();
 }

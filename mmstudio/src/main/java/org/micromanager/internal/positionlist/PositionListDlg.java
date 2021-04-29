@@ -27,6 +27,7 @@ import com.google.common.eventbus.Subscribe;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Insets;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
@@ -34,14 +35,7 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.io.File;
 import java.util.ArrayList;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTable;
-import javax.swing.ListSelectionModel;
-import javax.swing.SwingUtilities;
+import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.table.TableCellRenderer;
@@ -54,21 +48,17 @@ import org.micromanager.PositionList;
 import org.micromanager.StagePosition;
 import org.micromanager.Studio;
 import org.micromanager.UserProfile;
+import org.micromanager.events.NewPositionListEvent;
 import org.micromanager.events.StagePositionChangedEvent;
 import org.micromanager.events.XYStagePositionChangedEvent;
 import org.micromanager.internal.MMStudio;
-import org.micromanager.internal.utils.DaytimeNighttime;
-import org.micromanager.internal.utils.EventBusExceptionLogger;
-import org.micromanager.internal.utils.FileDialogs;
+import org.micromanager.internal.utils.*;
 import org.micromanager.internal.utils.FileDialogs.FileType;
-import org.micromanager.internal.utils.GUIUtils;
-import org.micromanager.internal.utils.MMFrame;
-import org.micromanager.internal.utils.ReportingUtils;
 
 /**
  * The PositionListDlg class provides a convenient UI to generate, edit, load, and save PositionList objects.
  */
-public class PositionListDlg extends MMFrame implements MouseListener, ChangeListener {
+public class PositionListDlg extends JFrame implements MouseListener, ChangeListener {
    protected static final long serialVersionUID = 1L;
    protected String posListDir_;
    protected File curFile_;
@@ -136,7 +126,10 @@ public class PositionListDlg extends MMFrame implements MouseListener, ChangeLis
       setLayout(new MigLayout("flowy, filly, insets 8", "[grow][]", 
               "[top]"));
       setMinimumSize(new Dimension(275, 365));
-      super.loadAndRestorePosition(100, 100, 362, 595);
+      super.setIconImage(Toolkit.getDefaultToolkit().getImage(
+              getClass().getResource("/org/micromanager/icons/microscope.gif")));
+      super.setBounds(100, 100, 362, 595);
+      WindowPositioning.setUpBoundsMemory(this, this.getClass(), null);
 
       arialSmallFont_ = new Font("Arial", Font.PLAIN, 10);
 
@@ -161,7 +154,7 @@ public class PositionListDlg extends MMFrame implements MouseListener, ChangeLis
          }
       };
       posTable_.setFont(arialSmallFont_);
-      positionModel_ = new PositionTableModel(studio_);
+      positionModel_ = new PositionTableModel();
       positionModel_.setData(posList);
       posTable_.setModel(positionModel_);
       scrollPane.setViewportView(posTable_);
@@ -349,7 +342,9 @@ public class PositionListDlg extends MMFrame implements MouseListener, ChangeLis
       removeAllButton.addActionListener(new ActionListener() {
          @Override
          public void actionPerformed(ActionEvent arg0) {
-            int ret = JOptionPane.showConfirmDialog(null, "Are you sure you want to erase\nall positions from the position list?", "Clear all positions?", JOptionPane.YES_NO_OPTION);
+            int ret = JOptionPane.showConfirmDialog(PositionListDlg.this,
+                    "Are you sure you want to erase\nall positions from the position list?",
+                    "Clear all positions?", JOptionPane.YES_NO_OPTION);
             if (ret == JOptionPane.YES_OPTION) {
                clearAllPositions();
             }
@@ -516,6 +511,7 @@ public class PositionListDlg extends MMFrame implements MouseListener, ChangeLis
 
    protected void updatePositionData() {
       positionModel_.fireTableDataChanged();
+      updateMarkButtonText();
    }
    
    public void rebuildAxisList() {
@@ -712,11 +708,20 @@ public class PositionListDlg extends MMFrame implements MouseListener, ChangeLis
    // The stage position changed; update curMsp_.
    @Subscribe
    public void onStagePositionChanged(StagePositionChangedEvent event) {
-      // Do the update on the EDT (1) to prevent data races and (2) to prevent
-      // deadlock by calling back into the stage device adapter.
+      // Do the update on the EDT (1) to prevent data races.
+      // Use info from the event, do not query hardware
       SwingUtilities.invokeLater(new Runnable() {
          @Override public void run() {
-            refreshCurrentPosition();
+            if (!axisList_.use(event.getDeviceName())) {
+               return; // this axis is not in the list, continue
+            }
+            MultiStagePosition msp = MultiStagePosition.newInstance(curMsp_);
+            StagePosition sp = msp.get(event.getDeviceName());
+            msp.remove(sp);
+            sp = StagePosition.create1D(event.getDeviceName(), event.getPos());
+            msp.add(sp);
+
+            updateCurrentMsp(msp);
          }
       });
    }
@@ -724,20 +729,30 @@ public class PositionListDlg extends MMFrame implements MouseListener, ChangeLis
    // The stage position changed; update curMsp_.
    @Subscribe
    public void onXYStagePositionChanged(XYStagePositionChangedEvent event) {
-      // Do the update on the EDT (1) to prevent data races and (2) to prevent
-      // deadlock by calling back into the stage device adapter.
+      // Do the update on the EDT (1) to prevent data races.
+      // Use info from the event and do not query hardware
       SwingUtilities.invokeLater(new Runnable() {
          @Override public void run() {
-            refreshCurrentPosition();
+            if (!axisList_.use(event.getDeviceName())) {
+               return; // this axis is not in the list, continue
+            }
+            MultiStagePosition msp = MultiStagePosition.newInstance(curMsp_);
+            StagePosition sp = msp.get(event.getDeviceName());
+            msp.remove(sp);
+            sp = StagePosition.create2D(event.getDeviceName(), event.getXPos(), event.getYPos());
+            msp.add(sp);
+
+            updateCurrentMsp(msp);
          }
       });
    }
 
+
    /**
     * Update display of the current stage position.
+    * Go out to the hardware to get new positions
     */
    private void refreshCurrentPosition() {
-      StringBuilder sb = new StringBuilder();
       MultiStagePosition msp = new MultiStagePosition();
       msp.setDefaultXYStage(core_.getXYStageDevice());
       msp.setDefaultZStage(core_.getFocusDevice());
@@ -750,7 +765,6 @@ public class PositionListDlg extends MMFrame implements MouseListener, ChangeLis
                StagePosition sp = StagePosition.create1D(stages.get(i),
                        core_.getPosition(stages.get(i)));
                msp.add(sp);
-               sb.append(sp.getVerbose()).append("\n");
             }
          }
 
@@ -763,15 +777,19 @@ public class PositionListDlg extends MMFrame implements MouseListener, ChangeLis
                        core_.getXPosition(stageName),
                        core_.getYPosition(stageName));
                msp.add(sp);
-               sb.append(sp.getVerbose()).append("\n");
             }
          }
       } catch (Exception e) {
          ReportingUtils.showError(e);
       }
+      updateCurrentMsp(msp);
+   }
 
-      curMsp_ = msp;
-      curMsp_.setLabel("Current");
+   private void updateCurrentMsp(MultiStagePosition newCurrentMsp) {
+      newCurrentMsp.setLabel("Current");
+      // it would be nice to check if all stage names in the msp are actually in
+      // use.  However, I do not see a safe way to do so. (NS: 20201116)
+      curMsp_ = newCurrentMsp;
       positionModel_.setCurrentMSP(curMsp_);
 
       positionModel_.fireTableCellUpdated(0, 1);
@@ -830,7 +848,6 @@ public class PositionListDlg extends MMFrame implements MouseListener, ChangeLis
 
    public PositionList getPositionList() {
       return positionModel_.getPositionList();
-
    }
 
    /**
@@ -879,10 +896,10 @@ public class PositionListDlg extends MMFrame implements MouseListener, ChangeLis
       double [] x1;
       double [] y1;
       String deviceName;
-      MMFrame d;
+      JFrame d;
       Thread otherThread;
 
-      public void setPara(Thread calThread, MMFrame d, String deviceName, double [] x1, double [] y1) {
+      public void setPara(Thread calThread, JFrame d, String deviceName, double [] x1, double [] y1) {
          this.otherThread = calThread;
          this.d = d;
          this.deviceName = deviceName;
@@ -999,10 +1016,10 @@ public class PositionListDlg extends MMFrame implements MouseListener, ChangeLis
       double [] x1;
       double [] y1;
       String deviceName;
-      MMFrame d;
+      JFrame d;
       Thread stopThread;
 
-      public void setPara(Thread stopThread, MMFrame d, String deviceName, double [] x1, double [] y1) {
+      public void setPara(Thread stopThread, JFrame d, String deviceName, double [] x1, double [] y1) {
          this.stopThread = stopThread;
          this.d = d;
          this.deviceName = deviceName;
@@ -1069,9 +1086,9 @@ public class PositionListDlg extends MMFrame implements MouseListener, ChangeLis
    } // End CalThread class
 
    class BackThread extends Thread {
-      MMFrame d;
+      JFrame d;
 
-      public void setPara(MMFrame d) {
+      public void setPara(JFrame d) {
          this.d = d;
       }     
       @Override

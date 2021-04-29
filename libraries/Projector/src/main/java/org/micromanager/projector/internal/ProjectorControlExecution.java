@@ -25,8 +25,8 @@ import org.micromanager.Studio;
 import org.micromanager.data.DataProvider;
 import org.micromanager.data.Datastore;
 import org.micromanager.display.DisplayWindow;
-import org.micromanager.events.AcquisitionEndedEvent;
-import org.micromanager.events.AcquisitionStartedEvent;
+import org.micromanager.acquisition.AcquisitionEndedEvent;
+import org.micromanager.acquisition.AcquisitionStartedEvent;
 import org.micromanager.projector.ProjectionDevice;
 import org.micromanager.projector.internal.devices.Galvo;
 
@@ -68,7 +68,7 @@ public class ProjectorControlExecution {
       studio_.acquisitions().clearRunnables();
       if (repeat) {
          for (int i = firstFrame; 
-                 i < studio_.acquisitions().getAcquisitionSettings().numFrames * 10; 
+                 i < studio_.acquisitions().getAcquisitionSettings().numFrames() * 10;
                  i += frameRepeatInterval) {
             studio_.acquisitions().attachRunnable(i, -1, 0, 0, runPolygons);
          }
@@ -208,7 +208,7 @@ public class ProjectorControlExecution {
    // Save ROIs in the acquisition path, if it exists.
    private void recordPolygons(Roi[] individualRois_) {
       if (studio_.acquisitions().isAcquisitionRunning()) {
-         if (studio_.acquisitions().getAcquisitionSettings().save) {
+         if (studio_.acquisitions().getAcquisitionSettings().save()) {
             String location = store_ == null ? null : store_.getSavePath();
             if (location != null) {
                try {

@@ -20,21 +20,24 @@
 
 package org.micromanager.events;
 
-/**
- * This class signals when the exposure time for a given camera has changed.
- */
-public class SLMExposureChangedEvent {
-   private final String deviceName_;
-   private final double newExposureTime_;
+import org.micromanager.MMEvent;
 
-   public SLMExposureChangedEvent(String deviceName, double newExposureTime) {
-      deviceName_ = deviceName;
-      newExposureTime_ = newExposureTime;
-   }
-   public String getDeviceName() {
-      return deviceName_;
-   }
-   public double getNewExposureTime() {
-      return newExposureTime_;
-   }
+/**
+ * This interface posts when the exposure time for a given Spatial Light Modulator
+ * (such as a Digital Mirror Device) changes.
+ *
+ * The default implementation of this event posts on the Studio event bus,
+ * so subscribe using {@link org.micromanager.events.EventManager}.
+ */
+public interface SLMExposureChangedEvent extends MMEvent {
+
+   /**
+    * @return Name of the (SLM) device that changes exposure.
+    */
+   String getDeviceName();
+
+   /**
+    * @return new exposure time of thr (SLM) device.
+    */
+   double getNewExposureTime();
 }

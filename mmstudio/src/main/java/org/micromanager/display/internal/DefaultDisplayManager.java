@@ -52,7 +52,7 @@ import org.micromanager.display.DisplayWindow;
 import org.micromanager.display.ImageExporter;
 import org.micromanager.display.inspector.internal.InspectorCollection;
 import org.micromanager.display.inspector.internal.InspectorController;
-import org.micromanager.events.DatastoreClosingEvent;
+import org.micromanager.data.DatastoreClosingEvent;
 import org.micromanager.events.internal.InternalShutdownCommencingEvent;
 import org.micromanager.internal.utils.EventBusExceptionLogger;
 import org.micromanager.internal.utils.ReportingUtils;
@@ -130,7 +130,7 @@ public final class DefaultDisplayManager extends DataViewerListener implements D
    }
 
    @Override
-   public synchronized boolean getIsManaged(DataProvider provider) {
+   public synchronized boolean isManaged(DataProvider provider) {
       return providerToDisplays_.containsKey(provider);
    }
 
@@ -145,10 +145,7 @@ public final class DefaultDisplayManager extends DataViewerListener implements D
       ArrayList<DisplayWindow> displays = null;
       Datastore store = event.getDatastore();
       synchronized (this) {
-         if (providerToDisplays_.containsKey(store)) {
-            displays = providerToDisplays_.get(store);
-            providerToDisplays_.remove(store);
-         }
+         providerToDisplays_.remove(store);
       }
    }
 
@@ -160,7 +157,7 @@ public final class DefaultDisplayManager extends DataViewerListener implements D
    @Subscribe
    public void onShutdownCommencing(InternalShutdownCommencingEvent event) {
       // If shutdown is already cancelled, don't do anything.
-      if (!event.getIsCancelled() && !closeAllDisplayWindows(true)) {
+      if (!event.isCanceled() && !closeAllDisplayWindows(true)) {
          event.cancelShutdown();
       }
    }
@@ -309,7 +306,7 @@ public final class DefaultDisplayManager extends DataViewerListener implements D
 
       DataProvider store = viewer.getDataProvider();
       synchronized (this) {
-         if (getIsManaged(store) && viewer instanceof DisplayWindow) {
+         if (isManaged(store) && viewer instanceof DisplayWindow) {
             DisplayWindow display = (DisplayWindow) viewer;
             providerToDisplays_.get(store).add(display);
             display.addListener(this, 100);
@@ -347,11 +344,11 @@ public final class DefaultDisplayManager extends DataViewerListener implements D
          DisplaySettings displaySettings = DefaultDisplaySettings.
                  getSavedDisplaySettings(displaySettingsFile);
          if (displaySettings == null) {
-            displaySettings = RememberedSettings.loadDefaultDisplaySettings(
+            displaySettings = RememberedDisplaySettings.loadDefaultDisplaySettings(
                  studio_,
                  store.getSummaryMetadata());
          } else {
-            displaySettings = RememberedSettings.fixMissingInfo(displaySettings,
+            displaySettings = RememberedDisplaySettings.fixMissingInfo(displaySettings,
                     store.getSummaryMetadata());
          }
          // instead of using the createDisplay function, set the correct 
@@ -608,14 +605,7 @@ public final class DefaultDisplayManager extends DataViewerListener implements D
             // Last display; check for saving now.
             if (provider instanceof Datastore) {
                Datastore store = (Datastore) provider;
-               if (store.getSavePath() != null) {
-                  // Data have been saved already
-                  return true;
-               }
-               else {
-                  // prompt needed
-                  return false;
-               }
+               return store.getSavePath() != null;
             }
          }
          return false;

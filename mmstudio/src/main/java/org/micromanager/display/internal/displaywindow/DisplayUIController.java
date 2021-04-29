@@ -72,7 +72,7 @@ import org.micromanager.data.internal.DefaultCoords;
 import org.micromanager.display.ChannelDisplaySettings;
 import org.micromanager.display.ComponentDisplaySettings;
 import org.micromanager.display.DisplaySettings;
-import org.micromanager.display.internal.RememberedSettings;
+import org.micromanager.display.internal.RememberedDisplaySettings;
 import org.micromanager.display.internal.animate.AnimationController;
 import org.micromanager.display.internal.displaywindow.imagej.ImageJBridge;
 import org.micromanager.display.internal.event.DisplayKeyPressEvent;
@@ -89,20 +89,10 @@ import org.micromanager.display.internal.event.DataViewerMousePixelInfoChangedEv
 import org.micromanager.display.internal.gearmenu.GearButton;
 import org.micromanager.display.overlay.Overlay;
 import org.micromanager.events.internal.ChannelColorEvent;
-import org.micromanager.internal.utils.GUIUtils;
-import org.micromanager.internal.utils.Geometry;
-import org.micromanager.internal.utils.MMFrame;
-import org.micromanager.internal.utils.CoalescentEDTRunnablePool;
+import org.micromanager.internal.utils.*;
 import org.micromanager.internal.utils.CoalescentEDTRunnablePool.CoalescentRunnable;
-import org.micromanager.internal.utils.MustCallOnEDT;
-import org.micromanager.internal.utils.PopupButton;
-import org.micromanager.internal.utils.ThreadFactoryFactory;
 import org.micromanager.internal.utils.performance.PerformanceMonitor;
 import org.micromanager.internal.utils.performance.TimeIntervalRunningQuantile;
-import org.micromanager.internal.utils.JavaUtils;
-import org.micromanager.internal.utils.NumberUtils;
-import org.micromanager.internal.utils.ReportingUtils;
-import org.micromanager.internal.utils.ColorMaps;
 
 /**
  * Manages the JFrame(s) for image displays.
@@ -121,7 +111,7 @@ public final class DisplayUIController implements Closeable, WindowListener,
 {
    private final Studio studio_;
    private final DisplayController displayController_;
-   private final AnimationController animationController_;
+   private final AnimationController<Coords> animationController_;
 
    // All fields must only be accessed from the EDT unless otherwise noted.
 
@@ -232,7 +222,7 @@ public final class DisplayUIController implements Closeable, WindowListener,
    static DisplayUIController create(Studio studio, 
          DisplayController parent,
          DisplayWindowControlsFactory controlsFactory,
-         AnimationController animationController)
+         AnimationController<Coords> animationController)
    {
       DisplayUIController instance = new DisplayUIController(studio, parent,
             controlsFactory, animationController);
@@ -246,7 +236,7 @@ public final class DisplayUIController implements Closeable, WindowListener,
    private DisplayUIController(Studio studio, 
          DisplayController parent,
          DisplayWindowControlsFactory controlsFactory,
-         AnimationController animationController)
+         AnimationController<Coords> animationController)
    {
       studio_ = studio;
       displayController_ = parent;
@@ -266,10 +256,12 @@ public final class DisplayUIController implements Closeable, WindowListener,
    private JFrame makeFrame(boolean fullScreen) {
       JFrame frame;
       if (!fullScreen) {
-         // TODO LATER Eliminate MMFrame
-         frame = new MMFrame("image display window", false);
+         frame = new JFrame("image display window");
+         frame.setIconImage(Toolkit.getDefaultToolkit().getImage(
+                 getClass().getResource("/org/micromanager/icons/microscope.gif")));
          frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-         ((MMFrame) frame).loadPosition(320, 320, 480, 320);
+         frame.setBounds(320, 320, 480, 320);
+         WindowPositioning.setUpBoundsMemory(frame, frame.getClass(), null);
 
          // TODO Determine initial window bounds using a CascadingWindowPositioner:
          // - (Setting canvas zoom has been handled by DisplayController (ImageJLink))
@@ -540,7 +532,7 @@ public final class DisplayUIController implements Closeable, WindowListener,
       // automatic calculation of minimum size of bottom panel
       // can be misleading because no minimum size for the scrollbars is included.
       // So, help out a bit by setting a reasonable minimum
-      panel.setMinimumSize(new Dimension(345, 10));
+      panel.setMinimumSize(new Dimension(345, 55));
       
       return panel;
    }
@@ -580,7 +572,7 @@ public final class DisplayUIController implements Closeable, WindowListener,
          animateButton.addActionListener((ActionEvent e) -> {
             handleAxisAnimateButton(e);
          });
-         axisAnimationButtons_.add(new AbstractMap.SimpleEntry(
+         axisAnimationButtons_.add(new AbstractMap.SimpleEntry<>(
                axis, animateButton));
       }
       ret.add(animateButton, new CC());
@@ -616,7 +608,7 @@ public final class DisplayUIController implements Closeable, WindowListener,
          positionButton.setMaximumSize(size);
          positionButton.setPreferredSize(size);
          positionButton.setMargin(buttonInsets_);
-         axisPositionButtons_.add(new AbstractMap.SimpleEntry(
+         axisPositionButtons_.add(new AbstractMap.SimpleEntry<> (
                axis, positionButton));
       }
       ret.add(positionButton, new CC());
@@ -781,8 +773,11 @@ public final class DisplayUIController implements Closeable, WindowListener,
       // redrawing the info line (which may be expensive), check if pixelsize
       // changed (which can happen for the snap/live window) and only redraw the 
       // info label if it changed.
-      if (!cachedPixelSize_.equals(images.getRequest().getImage(0).getMetadata().
-              getPixelSizeUm())) {
+      Double currentPixelSize = images.getRequest().getImage(0).getMetadata().getPixelSizeUm();
+      if (currentPixelSize == null) {
+         currentPixelSize = 0.0;
+      }
+      if (!currentPixelSize.equals(cachedPixelSize_)) {
          infoLabel_.setText(this.getInfoString(images));
          ijBridge_.mm2ijSetMetadata();
          cachedPixelSize_ = images.getRequest().getImage(0).getMetadata().
@@ -808,10 +803,12 @@ public final class DisplayUIController implements Closeable, WindowListener,
    void updateSliders(ImagesAndStats images) {
       Coords nominalCoords = images.getRequest().getNominalCoords();
       for (String axis : scrollBarPanel_.getAxes()) {
+         int index = 0;
          if (nominalCoords.hasAxis(axis)) {
-            scrollBarPanel_.setAxisPosition(axis, nominalCoords.getIndex(axis));
-            updateAxisPositionIndicator(axis, nominalCoords.getIndex(axis), -1);
+            index = nominalCoords.getIndex(axis);
          }
+         scrollBarPanel_.setAxisPosition(axis, index);
+         updateAxisPositionIndicator(axis, index, -1);
       }
    }
 
@@ -957,7 +954,7 @@ public final class DisplayUIController implements Closeable, WindowListener,
             // also when other things change
             // TODO: should all channeldisplaysetting changes be remembered?
             ChannelDisplaySettings rememberedSettings =
-                    RememberedSettings.loadChannel(studio_,
+                    RememberedDisplaySettings.loadChannel(studio_,
                             channelSettings.getGroupName(), channelSettings.getName(), null);
             if (!rememberedSettings.getColor().equals(channelSettings.getColor())) {
                // To ensure that we do not respond to the event posted by us
@@ -975,7 +972,7 @@ public final class DisplayUIController implements Closeable, WindowListener,
                        channelSettings.getColor());
                studio_.events().post(channelColorEvent_);
             }
-            RememberedSettings.storeChannel(studio_, channelSettings.getGroupName(), channelSettings.getName(),
+            RememberedDisplaySettings.storeChannel(studio_, channelSettings.getGroupName(), channelSettings.getName(),
                     rememberedSettings.copyBuilder().color(channelSettings.getColor()).build());
 
             ComponentDisplaySettings componentSettings =
@@ -1052,38 +1049,40 @@ public final class DisplayUIController implements Closeable, WindowListener,
          }
 
          if (images.getResult().size() > statsIndex) {
-         ImageStats stats = images.getResult().get(statsIndex);
-         long min = stats.getComponentStats(0).getAutoscaleMinForQuantile(q);
-         long max = Math.min(Integer.MAX_VALUE,
-               stats.getComponentStats(0).getAutoscaleMaxForQuantile(q));
-         // NS 2019-05-29: This should not be done here, but in IntegerComponentsStats
-         // however, I do not understand that code enough to touch it....
-         // This at least fixes the display somewhat (showing black for 
-         // a saturated image is really, really bad!)
-         if (min == max) {
-            if (max == 0) {
-               max++;
-            } else {
-               min--;
+            ImageStats stats = images.getResult().get(statsIndex);
+            long min = stats.getComponentStats(0).getAutoscaleMinForQuantile(q);
+            long max = Math.min(Integer.MAX_VALUE,
+                    stats.getComponentStats(0).getAutoscaleMaxForQuantile(q));
+            // NS 2019-05-29: This should not be done here, but in IntegerComponentsStats
+            // however, I do not understand that code enough to touch it....
+            // This at least fixes the display somewhat (showing black for
+            // a saturated image is really, really bad!)
+            if (min == max) {
+               if (max == 0) {
+                  max++;
+               }
+               else {
+                  min--;
+               }
             }
+            // NS 2019-08-15: We really do need to write the min and max to
+            // the DisplaySettings (there already is a work-around in the
+            // IntensityInspectorPanelController handleAutostretch function, but
+            // the min and max value in the DisplaySettings should be these ones
+            // at any point in time, and not only when the Autostretch checkbox
+            // is checked.
+            // I know that the correct way is to construct a complete new DisplaySettings
+            // object with completely new ComnponentDisplaySettings, but it seems
+            // more than a little bit excessive to do that on every autostrech update
+            // so we take the shortcut here
+            DefaultComponentDisplaySettings dcds = (DefaultComponentDisplaySettings)
+                    settings.getChannelSettings(i).getComponentSettings(0);
+            dcds.setScalingMinimum(min);
+            dcds.setScalingMaximum(max);
+            ijBridge_.mm2ijSetIntensityScaling(i, (int) min, (int) max);
          }
-         // NS 2019-08-15: We really do need to write the min and max to 
-         // the DisplaySettings (there already is a work-around in the 
-         // IntensityInspectorPanelController handleAutostretch function, but 
-         // the min and max value in the DisplaySettings should be these ones
-         // at any point in time, and not only when the Autostretch checkbox
-         // is checked.
-         // I know that the correct way is to construct a complete new DisplaySettings
-         // object with completely new ComnponentDisplaySettings, but it seems 
-         // more than a little bit excessive to do that on every autostrech update
-         // so we take the shortcut here
-         DefaultComponentDisplaySettings dcds = (DefaultComponentDisplaySettings) 
-                 settings.getChannelSettings(i).getComponentSettings(0);
-         dcds.setScalingMinimum(min);
-         dcds.setScalingMaximum(max);
-         ijBridge_.mm2ijSetIntensityScaling(i, (int) min, (int) max);
-         } else {
-            ReportingUtils.logError("DisplayUICOntroller: Received request to " +
+         else {
+            ReportingUtils.logMessage("DisplayUICOntroller: Received request to " +
                     "autostretch image for which no statistics are available");
          }
       }
@@ -1302,13 +1301,14 @@ public final class DisplayUIController implements Closeable, WindowListener,
 
          Insets frameInsets = frame_.getInsets();
          int newCanvasWidth = Math.min(canvasMaxSize.width,
-               screenBounds.width - frameInsets.left - frameInsets.right -
-                     2 * BORDER_THICKNESS);
+               screenBounds.x + screenBounds.width - frameInsets.left - frameInsets.right -
+                     2 * BORDER_THICKNESS - frame_.getX());
          int newCanvasHeight = Math.min(canvasMaxSize.height,
-               screenBounds.height - frameInsets.top - frameInsets.bottom -
+               screenBounds.y + screenBounds.height - frameInsets.top - frameInsets.bottom -
                      2 * BORDER_THICKNESS -
                      topControlPanel_.getSize().height -
-                     bottomControlPanel_.getSize().height);
+                     bottomControlPanel_.getSize().height -
+                     frame_.getY());
          ijBridge_.getIJImageCanvas().setPreferredSize(
                new Dimension(newCanvasWidth, newCanvasHeight));
          ijBridge_.getIJImageCanvas().invalidate();
@@ -1832,11 +1832,13 @@ public final class DisplayUIController implements Closeable, WindowListener,
          return "Failed to find image";
       }
 
-      double widthUm = getImageWidth() * pixelSize;
-      double heightUm = getImageHeight() * pixelSize;
-      infoStringB.append(NumberUtils.doubleToDisplayString(widthUm)).append("x").
-              append(NumberUtils.doubleToDisplayString(heightUm)).
-              append("\u00B5").append("m  ");
+      if (pixelSize != null && pixelSize != 0.0) {
+         double widthUm = getImageWidth() * pixelSize;
+         double heightUm = getImageHeight() * pixelSize;
+         infoStringB.append(NumberUtils.doubleToDisplayString(widthUm)).append("x").
+                 append(NumberUtils.doubleToDisplayString(heightUm)).
+                 append("\u00B5").append("m  ");
+      }
 
       infoStringB.append(getImageWidth()).append("x").append(getImageHeight());
       infoStringB.append("px  ");
@@ -1988,9 +1990,6 @@ public final class DisplayUIController implements Closeable, WindowListener,
       // position based on user input. Also consider disabling scroll bars that
       // are being animated.
       Coords.CoordsBuilder builder = new DefaultCoords.Builder();
-      // work around general bug needing all 4 basic stages
-      // TODO: remove this dependency!!!
-      builder.channel(0).time(0).stagePosition(0).z(0); 
       for (String axis : panel.getAxes()) {
          builder.index(axis, panel.getAxisPosition(axis));
       }
@@ -2050,7 +2049,7 @@ public final class DisplayUIController implements Closeable, WindowListener,
    @Subscribe
    public void onLiveModeEvent(LiveModeEvent liveModeEvent) {
       // Used to reset counters for camera fps measurements
-      if (liveModeEvent.getIsOn()) {
+      if (liveModeEvent.isOn()) {
          nrLiveFramesReceived_ = 0;
          lastImageNumber_ = 0;
          durationMs_ = 0.0;

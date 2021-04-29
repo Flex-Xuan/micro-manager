@@ -32,6 +32,8 @@ import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
 import ij.process.ImageStatistics;
 import ij.process.ShortProcessor;
+
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
@@ -42,9 +44,8 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.SwingUtilities;
+import javax.swing.*;
+
 import mmcorej.CMMCore;
 import mmcorej.TaggedImage;
 import net.miginfocom.swing.MigLayout;
@@ -61,9 +62,9 @@ import org.micromanager.data.SummaryMetadata;
 // maintainability. However, this plugin code is older than the current
 // MMStudio API, so it still uses internal classes and interfaces. New code
 // should not imitate this practice.
-import org.micromanager.internal.utils.MMFrame;
 import org.micromanager.internal.utils.NumberUtils;
 import org.micromanager.internal.utils.ReportingUtils;
+import org.micromanager.internal.utils.WindowPositioning;
 
 public class PtcToolsExecutor extends Thread  {
    private final Studio studio_;
@@ -117,7 +118,7 @@ public class PtcToolsExecutor extends Thread  {
 
          // temporary store to hold images while calculating mean and stdDev
          Datastore store = studio_.data().createRAMDatastore();
-         final SummaryMetadata.Builder smb = studio_.data().getSummaryMetadataBuilder();
+         final SummaryMetadata.Builder smb = studio_.data().summaryMetadataBuilder();
          final Coords.Builder cb = Coordinates.builder();
          Coords coords = cb.c(1).p(1).
                  t(nrFrames).z(1).build();
@@ -249,19 +250,16 @@ public class PtcToolsExecutor extends Thread  {
    
    
    private void showDialog(final String label, final PtcSequenceRunner sr) {
-      final MMFrame dialog = new MMFrame();
+      final JFrame dialog = new JFrame();
       dialog.setBounds(settings_.getInteger(PtcToolsTerms.WINDOWX, 100), 
               settings_.getInteger(PtcToolsTerms.WINDOWY, 100), 400, 100);
-      dialog.addComponentListener(new ComponentAdapter() {
-         @Override
-         public void componentMoved(ComponentEvent e) {
-            dialog.savePosition();
-         }
-      });
       dialog.setLayout(new MigLayout());
       dialog.setTitle("PTC Tools");
       dialog.add(new JLabel(label), "wrap");
       dialog.add(new JLabel("Press OK when ready"), "wrap");
+      dialog.setIconImage(Toolkit.getDefaultToolkit().getImage(
+              getClass().getResource("/org/micromanager/icons/microscope.gif")));
+      WindowPositioning.setUpBoundsMemory(dialog, dialog.getClass(), null);
       JButton cancelButton = new JButton("Cancel");
       final JLabel resultLabel = new JLabel("Not started yet...");
       cancelButton.addActionListener((ActionEvent e) -> {
@@ -311,7 +309,7 @@ public class PtcToolsExecutor extends Thread  {
    private void calculateAndAddToStack(ImageStack stack, Datastore store) 
             throws IOException, OutOfMemoryError {
       final Coords.Builder cb = Coordinates.builder().c(1).p(1).t(1).z(1);
-      int nrFrames = store.getAxisLength(Coords.T);
+      int nrFrames = store.getNextIndex(Coords.T);
       ImageStack tmpStack = new ImageStack(stack.getWidth(), stack.getHeight());
       List<ShortProcessor> lc = new ArrayList<>(nrFrames);
          for (int i = 0; i < nrFrames; i++) {
@@ -338,7 +336,7 @@ public class PtcToolsExecutor extends Thread  {
    private ExpMeanStdDev calcExpMeanStdDev(Datastore store) throws IOException {
       ExpMeanStdDev result = new ExpMeanStdDev();
       final Coords.Builder cb = Coordinates.builder().c(1).p(1).t(1).z(1);
-      final int nrFrames = store.getAxisLength(Coords.T);
+      final int nrFrames = store.getNextIndex(Coords.T);
       double[] means = new double[nrFrames];
       for (int i = 0; i < nrFrames; i++) {
          Image image = store.getImage(cb.t(i).build());

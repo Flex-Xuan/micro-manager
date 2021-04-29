@@ -118,7 +118,7 @@ public class Hub {
                  JOptionPane.YES_NO_OPTION);
          if (result == JOptionPane.YES_OPTION) {
             try {
-               ((MMStudio) studio_).createCalibrationListDlg();
+               ((MMStudio) studio_).uiManager().createCalibrationListDlg();
             } catch (Exception ex) {
                studio_.logs().showError("Unable to start Pixel Size Calibration.");
             }
@@ -697,7 +697,7 @@ public class Hub {
          Point mapPosition = coords_.tileToMap(tileIndex);
 
          if (!cache_.hasImage(tileIndex)) {
-            studio_.getSnapLiveManager().setLiveMode(false);
+            studio_.getSnapLiveManager().setLiveModeOn(false);
             final ImageProcessor img = controller_.grabImageAtMapPosition(mapPosition);
             cache_.addImage(tileIndex, img);
          }

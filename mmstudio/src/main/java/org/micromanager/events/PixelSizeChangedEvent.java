@@ -20,12 +20,20 @@
 
 package org.micromanager.events;
 
-public class PixelSizeChangedEvent {
-   private final double newPixelSizeUm_;
-   public PixelSizeChangedEvent(double newPixelSizeUm) {
-      newPixelSizeUm_ = newPixelSizeUm;
-   }
-   public double getNewPixelSizeUm() {
-      return newPixelSizeUm_;
-   }
+import org.micromanager.MMEvent;
+
+/**
+ * This event posts when the pixel size, the size of a camera pixel in the object
+ * plane, changes.
+ *
+ * The default implementation of this event posts on the Studio event bus,
+ * so subscribe using {@link org.micromanager.events.EventManager}.
+ */
+public interface PixelSizeChangedEvent extends MMEvent {
+
+   /**
+    * @return new pixel size in microns.
+    */
+   double getNewPixelSizeUm();
+
 }

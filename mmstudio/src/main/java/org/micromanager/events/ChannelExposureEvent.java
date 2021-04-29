@@ -20,52 +20,44 @@
 
 package org.micromanager.events;
 
+import org.micromanager.MMEvent;
+
 /**
  * This class signals when the exposure time for one of the channels of the
  * current channel group has been changed.
+ *
+ * The default implementation of this event is posted on the Studio event bus,
+ * so subscribe using {@link org.micromanager.events.EventManager}.
  */
-public class ChannelExposureEvent {
-   private final double newExposureTime_;
-   private final String channelGroup_;
-   private final String channel_;
-   private final boolean isMainExposureTime_;
+public interface ChannelExposureEvent extends MMEvent {
 
-   public ChannelExposureEvent(double newExposureTime, String channelGroup,
-         String channel, boolean isMainExposureTime) {
-      newExposureTime_ = newExposureTime;
-      channelGroup_ = channelGroup;
-      channel_ = channel;
-      isMainExposureTime_ = isMainExposureTime;
-   }
-
-   /**
+    /**
     * Return the new exposure time for the channel.
     */
-   public double getNewExposureTime() {
-      return newExposureTime_;
-   }
+    double getNewExposureTime();
 
    /**
     * Return the name of the channel group in which the modified channel
     * is located.
     */
-   public String getChannelGroup() {
-      return channelGroup_;
-   }
+   String getChannelGroup();
 
    /**
     * Return the channel whose exposure time has changed.
     */
-   public String getChannel() {
-      return channel_;
-   }
+    String getChannel();
 
    /**
     * Returns true if this channel is the currently-active channel (i.e. the
     * one used for snaps and live mode, the one whose exposure time is
     * displayed in the main window).
     */
-   public boolean getIsMainExposureTime() {
-      return isMainExposureTime_;
-   }
+    boolean isMainExposureTime();
+
+   /**
+    *
+    * @deprecated use {@link #isMainExposureTime()} instead
+    */
+   @Deprecated
+    boolean getIsMainExposureTime();
 }

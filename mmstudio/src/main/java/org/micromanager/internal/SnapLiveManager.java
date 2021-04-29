@@ -16,6 +16,8 @@ package org.micromanager.internal;
 
 import com.bulenkov.iconloader.IconLoader;
 import com.google.common.eventbus.Subscribe;
+
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Insets;
@@ -70,7 +72,7 @@ import org.micromanager.internal.utils.performance.PerformanceMonitor;
 import org.micromanager.internal.utils.performance.gui.PerformanceMonitorUI;
 import org.micromanager.quickaccess.internal.QuickAccessFactory;
 import org.micromanager.display.DisplayWindowControlsFactory;
-import org.micromanager.display.internal.RememberedSettings;
+import org.micromanager.display.internal.RememberedDisplaySettings;
 import org.micromanager.events.internal.MouseMovesStageStateChangeEvent;
 import org.micromanager.internal.navigation.UiMovesStageManager;
 
@@ -164,7 +166,7 @@ public final class SnapLiveManager extends DataViewerListener
    }
 
    @Override
-   public void setLiveMode(boolean isOn) {
+   public void setLiveModeOn(boolean isOn) {
       synchronized(liveModeLock_) {
          if (isLiveOn_ == isOn) {
             return;
@@ -178,8 +180,8 @@ public final class SnapLiveManager extends DataViewerListener
          else {
             stopLiveMode();
          }
-         mmStudio_.events().post(new DefaultLiveModeEvent(isLiveOn_));
       }
+      mmStudio_.events().post(new DefaultLiveModeEvent(isLiveOn_));
    }
 
    /**
@@ -238,7 +240,7 @@ public final class SnapLiveManager extends DataViewerListener
          ReportingUtils.showError(e, "Couldn't start live mode sequence acquisition");
          // Give up on starting live mode.
          amStartingSequenceAcquisition_ = false;
-         setLiveMode(false);
+         setLiveModeOn(false);
          return;
       }
 
@@ -447,7 +449,7 @@ public final class SnapLiveManager extends DataViewerListener
    }
 
    @Override
-   public boolean getIsLiveModeOn() {
+   public boolean isLiveModeOn() {
       return isLiveOn_;
    }
 
@@ -483,6 +485,21 @@ public final class SnapLiveManager extends DataViewerListener
                  DisplaySettings.ColorMode.GRAYSCALE).build();
       }
       for (int ch = 0; ch < store_.getSummaryMetadata().getChannelNameList().size(); ch++) {
+         ds = ds.copyBuilderWithChannelSettings(ch,
+                 RememberedDisplaySettings.loadChannel(mmStudio_,
+                         store_.getSummaryMetadata().getChannelGroup(),
+                         store_.getSummaryMetadata().getSafeChannelName(ch),
+                         Color.white)).build();
+      }
+
+                 // NS 2020-09-07: channeldisplaysettings remembered in SNAP/Live displaysetting
+      // are replaced by channel specific display settings.  It is a bit unclear
+      // how this is supposed to work, but at the very least, these settings should
+      // also be saved when closing the Snap/Live display.
+      // For now, it seems simpler to not do this, revisit when this code is
+      // thoroughly examined
+      /*
+      for (int ch = 0; ch < store_.getSummaryMetadata().getChannelNameList().size(); ch++) {
          ds = ds.copyBuilderWithChannelSettings(ch, 
                  RememberedSettings.loadChannel(mmStudio_, 
                          store_.getSummaryMetadata().getChannelGroup(), 
@@ -490,13 +507,14 @@ public final class SnapLiveManager extends DataViewerListener
                          null)).
                  build();
       }
+       */
       display_.setDisplaySettings(ds);
       mmStudio_.displays().addViewer(display_);
 
       display_.registerForEvents(this);
       display_.addListener(this, 1);
       display_.setCustomTitle(TITLE);
-      if (mmStudio_.getMMMenubar().getToolsMenu().getMouseMovesStage() && display_ != null) {
+      if (mmStudio_.uiManager().menubar().getToolsMenu().getMouseMovesStage() && display_ != null) {
          uiMovesStageManager_.activate(display_);
       }
       display_.show();
@@ -515,7 +533,7 @@ public final class SnapLiveManager extends DataViewerListener
    @Subscribe
    public void onMouseMovesStageStateChange(MouseMovesStageStateChangeEvent e) {
       if (display_ != null) {
-         if (e.getIsEnabled()) {
+         if (e.isEnabled()) {
             uiMovesStageManager_.activate(display_);
          } else {
             uiMovesStageManager_.deActivate(display_);
@@ -557,7 +575,7 @@ public final class SnapLiveManager extends DataViewerListener
          // Send all images at current channel to the album.
          Coords.CoordsBuilder builder = Coordinates.builder();
          boolean hadChannels = false;
-         for (int i = 0; i < store_.getAxisLength(Coords.CHANNEL); ++i) {
+         for (int i = 0; i < store_.getNextIndex(Coords.CHANNEL); ++i) {
             builder.channel(i);
             try {
                mmStudio_.album().addImages(store_.getImagesMatching(
@@ -614,11 +632,11 @@ public final class SnapLiveManager extends DataViewerListener
             } else if (!name.equals(channelNames.get(camCh))) {
                // Channel name changed.
                if (display_ != null && !display_.isClosed()) {
-                  RememberedSettings.storeChannel(mmStudio_, 
+                  RememberedDisplaySettings.storeChannel(mmStudio_,
                           store_.getSummaryMetadata().getChannelGroup(), 
                           store_.getSummaryMetadata().getChannelNameList().get(camCh),
                           display_.getDisplaySettings().getChannelSettings(camCh));
-                  ChannelDisplaySettings newCD = RememberedSettings.loadChannel(
+                  ChannelDisplaySettings newCD = RememberedDisplaySettings.loadChannel(
                           mmStudio_, 
                           core_.getChannelGroup(),
                           name,
@@ -860,8 +878,8 @@ public final class SnapLiveManager extends DataViewerListener
 
    @Subscribe
    public void onShutdownCommencing(InternalShutdownCommencingEvent event) {
-      if (!event.getIsCancelled()) {
-         setLiveMode(false);
+      if (!event.isCanceled()) {
+         setLiveModeOn(false);
       }
    }
 
@@ -876,7 +894,7 @@ public final class SnapLiveManager extends DataViewerListener
    public boolean canCloseViewer(DataViewer viewer) {
       if (viewer instanceof DisplayWindow && viewer.equals(display_)) {
          saveDisplaySettings();
-         setLiveMode(false);
+         setLiveModeOn(false);
       }
       return true;
    }

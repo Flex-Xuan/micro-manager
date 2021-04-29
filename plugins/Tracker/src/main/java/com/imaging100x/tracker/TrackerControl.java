@@ -30,6 +30,7 @@ import ij.gui.Roi;
 import ij.process.ImageProcessor;
 
 import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
@@ -39,12 +40,7 @@ import java.io.File;
 import java.util.GregorianCalendar;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import javax.swing.ButtonGroup;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JRadioButton;
-import javax.swing.JTextField;
-import javax.swing.Timer;
+import javax.swing.*;
 import javax.swing.border.BevelBorder;
 
 import mmcorej.MMCoreJ;
@@ -65,11 +61,11 @@ import org.micromanager.UserProfile;
 // should not imitate this practice.
 import org.micromanager.internal.utils.FileDialogs;
 import org.micromanager.internal.utils.MDUtils;
-import org.micromanager.internal.utils.MMFrame;
 import org.micromanager.internal.utils.TextUtils;
+import org.micromanager.internal.utils.WindowPositioning;
 
 
-public class TrackerControl extends MMFrame {
+public class TrackerControl extends JFrame {
    public static final String menuName = "Live Tracking";
    public static final String tooltipDescription =
       "Use image correlation based tracking to countersteer the XY stage";
@@ -195,13 +191,13 @@ public class TrackerControl extends MMFrame {
       addWindowListener(new WindowAdapter() {
          @Override
          public void windowOpened(WindowEvent e) {
-            resolutionPix_ = up.getInt(this.getClass(), RESOLUTION_PIX, resolutionPix_);
-            offsetPix_ = up.getInt(this.getClass(), OFFSET_PIX, offsetPix_);
-            intervalMs_ = up.getInt(this.getClass(), INTERVAL_MS, intervalMs_);
-            diskRadioButton_.setSelected(up.getBoolean(this.getClass(), 
+            resolutionPix_ = up.getInt(TrackerControl.this.getClass(), RESOLUTION_PIX, resolutionPix_);
+            offsetPix_ = up.getInt(TrackerControl.this.getClass(), OFFSET_PIX, offsetPix_);
+            intervalMs_ = up.getInt(TrackerControl.this.getClass(), INTERVAL_MS, intervalMs_);
+            diskRadioButton_.setSelected(up.getBoolean(TrackerControl.this.getClass(),
                     DISK_RECORDING, diskRadioButton_.isSelected()));
-            rootField_.setText(up.getString(this.getClass(), ROOT, ""));
-            nameField_.setText(up.getString(this.getClass(), NAME, ""));
+            rootField_.setText(up.getString(TrackerControl.this.getClass(), ROOT, ""));
+            nameField_.setText(up.getString(TrackerControl.this.getClass(), NAME, ""));
 
             resField_.setText(Integer.toString(resolutionPix_));
             offsetField_.setText(Integer.toString(offsetPix_));
@@ -211,20 +207,24 @@ public class TrackerControl extends MMFrame {
 
          @Override
          public void windowClosing(final WindowEvent e) {
-            up.setInt(this.getClass(), RESOLUTION_PIX, resolutionPix_);
-            up.setInt(this.getClass(), OFFSET_PIX, offsetPix_);
-            up.setInt(this.getClass(), INTERVAL_MS, intervalMs_);
-            up.setBoolean(this.getClass(), DISK_RECORDING, 
+            up.setInt(TrackerControl.this.getClass(), RESOLUTION_PIX, resolutionPix_);
+            up.setInt(TrackerControl.this.getClass(), OFFSET_PIX, offsetPix_);
+            up.setInt(TrackerControl.this.getClass(), INTERVAL_MS, intervalMs_);
+            up.setBoolean(TrackerControl.this.getClass(), DISK_RECORDING,
                     diskRadioButton_.isSelected());
-            up.setString(this.getClass(), ROOT, rootField_.getText());
-            up.setString(this.getClass(), NAME, nameField_.getText());
+            up.setString(TrackerControl.this.getClass(), ROOT, rootField_.getText());
+            up.setString(TrackerControl.this.getClass(), NAME, nameField_.getText());
          }
       });
 
       setTitle("Live Tracking");
       setResizable(false);
       getContentPane().setLayout(null);
-      loadAndRestorePosition(100, 100, 412, 346);
+
+      super.setIconImage(Toolkit.getDefaultToolkit().getImage(
+              getClass().getResource("/org/micromanager/icons/microscope.gif")));
+      super.setBounds(100, 100, 412, 346);
+      WindowPositioning.setUpBoundsMemory(this, this.getClass(), null);
 
       final JLabel intervalmsLabel = new JLabel();
       intervalmsLabel.setText("Interval [ms]");

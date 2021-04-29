@@ -31,10 +31,14 @@ import java.awt.Color;
  * MDA (multi-dimensional acquisition). It contains fields corresponding to
  * each of the columns in the Channels section of the MDA dialog. ChannelSpecs
  * are used by the SequenceSettings object to set up channels for acquisitions.
+ *
+ * Maintainer note: This should be an interface, but kept as a class for backward
+ * compatibility.
+ *
  */
 @SuppressWarnings("unused")
-public class ChannelSpec {
-   public static class Builder{
+public final class ChannelSpec {
+   public static final class Builder{
 
       /** Channel group this channel config belongs to **/
       private String channelGroup_ = "";
@@ -46,7 +50,9 @@ public class ChannelSpec {
       private double zOffset_ = 0.0;
       /** Whether this channel should be imaged in each Z slice of the stack */
       private Boolean doZStack_ = true;
-      /** Color to use when displaying this channel */
+      /** Color to use when displaying this channel
+       * @deprecated  use ChannelDisplaySettings.color() instead */
+      @Deprecated
       private Color color_ = Color.gray;
       /** Number of frames to skip between each time this channel is imaged. */
       private int skipFactorFrame_ = 0;
@@ -64,6 +70,8 @@ public class ChannelSpec {
       public Builder exposure (double exposure) { exposure_ = exposure; return this; }
       public Builder zOffset (double zOffset) { zOffset_ = zOffset; return this; }
       public Builder doZStack (Boolean doZStack) { doZStack_ = doZStack; return this; }
+      /** @deprecated  use ChannelDisplaySettings.color() instead */
+      @Deprecated
       public Builder color (Color color) { color_ = color; return this; }
       public Builder skipFactorFrame (int skipFactorFrame) { skipFactorFrame_ = skipFactorFrame; return this; }
       public Builder useChannel (boolean useChannel) { useChannel_ = useChannel; return this; }

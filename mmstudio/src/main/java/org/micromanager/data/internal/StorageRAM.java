@@ -21,15 +21,17 @@
 package org.micromanager.data.internal;
 
 import com.google.common.eventbus.Subscribe;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import org.micromanager.data.Coords;
+import org.micromanager.data.DataProviderHasNewSummaryMetadataEvent;
 import org.micromanager.data.Datastore;
 import org.micromanager.data.Image;
 import org.micromanager.data.RewritableStorage;
 import org.micromanager.data.SummaryMetadata;
-import org.micromanager.data.DataProviderHasNewSummaryMetadataEvent;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 
 /**
  * Simple RAM-based storage for Datastores. Methods that interact with the
@@ -47,7 +49,7 @@ public final class StorageRAM implements RewritableStorage {
    private SummaryMetadata summaryMetadata_;
 
    public StorageRAM(Datastore store) {
-      coordsToImage_ = new HashMap<Coords, Image>();
+      coordsToImage_ = new HashMap<>();
       maxIndex_ = new DefaultCoords.Builder().build();
       summaryMetadata_ = (new DefaultSummaryMetadata.Builder()).build();
       // It is imperative that we be notified of new images before anyone who
@@ -60,6 +62,10 @@ public final class StorageRAM implements RewritableStorage {
     */
    @Override
    public synchronized void putImage(Image image) {
+      Image imageExisting = getAnyImage();
+      if (imageExisting != null) {
+         ImageSizeChecker.checkImageSizes(image, imageExisting);
+      }
       Coords coords = image.getCoords();
       coordsToImage_.put(coords, image);
       for (String axis : coords.getAxes()) {
@@ -90,7 +96,7 @@ public final class StorageRAM implements RewritableStorage {
    @Override
    public synchronized Image getAnyImage() {
       if (coordsToImage_ != null && coordsToImage_.size() > 0) {
-         Coords coords = new ArrayList<Coords>(coordsToImage_.keySet()).get(0);
+         Coords coords = new ArrayList<>(coordsToImage_.keySet()).get(0);
          return coordsToImage_.get(coords);
       }
       return null;
@@ -101,13 +107,30 @@ public final class StorageRAM implements RewritableStorage {
       if (coordsToImage_ == null) {
          return null;
       }
-      ArrayList<Image> results = new ArrayList<Image>();
+      List<Image> results = new ArrayList<>();
       for (Image image : coordsToImage_.values()) {
-         if (image.getCoords().isSubspaceCoordsOf(coords)) {
+         // TODO figure out why subSpace was used and fix problems by not doing it
+         //  if (image.getCoords().isSubspaceCoordsOf(coords)) {
+         if (image.getCoords().equals(coords)) {
             results.add(image);
          }
       }
       return results;
+   }
+
+   public synchronized List<Image> getImagesIgnoringAxes(Coords coords, String... ignoreTheseAxes)
+           throws IOException {
+      if (coordsToImage_ == null) {
+         return null;
+      }
+      List<Image> result = new ArrayList<>();
+      for (Image image : coordsToImage_.values()) {
+         Coords imCoord = image.getCoords().copyRemovingAxes(ignoreTheseAxes);
+         if (imCoord.equals(coords)) {
+            result.add (image);
+         }
+      }
+      return result;
    }
 
    @Override
@@ -121,7 +144,7 @@ public final class StorageRAM implements RewritableStorage {
    }
 
    @Override
-   public Integer getMaxIndex(String axis) {
+   public int getMaxIndex(String axis) {
       return maxIndex_.getIndex(axis);
    }
 
